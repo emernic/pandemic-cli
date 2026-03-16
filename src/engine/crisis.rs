@@ -958,16 +958,14 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         options: vec![ CrisisOption {
                             label: "Wait them out".into(),
                             description: format!(
-                                "No intrusion. {gov_name} may re-emerge on their own. \
-                                 Cooperation drops. If they don't come back, the region loses its governor."),
+                                "No intrusion. Cooperation -10. {gov_name} may not re-emerge."),
                             cost: None,
                         },
                         CrisisOption {
                             label: "Force entry".into(),
                             description: format!(
-                                "Your team breaks into the residence. {gov_name} is alive but \
-                                 furious about the breach. Cooperation drops hard. Supply lines \
-                                 disrupted as the governor retaliates."),
+                                "Your team breaks in. {gov_name} is alive but furious. \
+                                 Cooperation -20, supply lines -15% in {region_name}."),
                             cost: None,
                         },
                         ],
