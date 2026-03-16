@@ -4044,7 +4044,24 @@ impl BasicTech {
     }
 
     /// All techs in display order (column 0, then column 1, then column 2).
+    ///
+    /// The exhaustive match guard below ensures a compile error if a new
+    /// variant is added to `BasicTech` without being listed here.
     pub fn all() -> &'static [BasicTech] {
+        // Compile-time guard: exhaustive match forces update when variants change.
+        const fn _assert_all_variants_listed(t: BasicTech) {
+            match t {
+                BasicTech::TargetedDrugDesign
+                | BasicTech::MonoclonalAntibodies
+                | BasicTech::PhageTherapy
+                | BasicTech::ResilientGrids
+                | BasicTech::RapidSequencing
+                | BasicTech::ResistanceSurveillance
+                | BasicTech::MetagenomicSurveillance
+                | BasicTech::EpidemiologicalForecasting
+                | BasicTech::CombinationTherapy => {}
+            }
+        }
         &[
             // Column 0: Drug design
             BasicTech::TargetedDrugDesign,
