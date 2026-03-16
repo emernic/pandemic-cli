@@ -338,8 +338,6 @@ pub const COINFECTION_LETHALITY_PER_DISEASE: f64 = 0.25;
 pub const COINFECTION_THRESHOLD: f64 = 1000.0;
 pub const BORDER_CONTROLS_COST: f64 = 0.2;
 pub const BORDER_CONTROLS_PERSONNEL: u32 = 1;
-pub const WATER_SANITATION_COST: f64 = 0.3;
-pub const WATER_SANITATION_PERSONNEL: u32 = 1;
 pub const MARTIAL_LAW_COST: f64 = 1.5;
 pub const MARTIAL_LAW_PERSONNEL: u32 = 4;
 /// One-time funding cost for nuclear annihilation (no ongoing cost).
@@ -529,7 +527,6 @@ pub enum PolicyId {
     Quarantine,
     DiscourageHosp,
     BorderControls,
-    WaterSanitation,
     BasicScreening,
     AntigenScreening,
     MassRapidScreen,
@@ -546,7 +543,6 @@ impl PolicyId {
         PolicyId::Quarantine,
         PolicyId::DiscourageHosp,
         PolicyId::BorderControls,
-        PolicyId::WaterSanitation,
         PolicyId::BasicScreening,
         PolicyId::AntigenScreening,
         PolicyId::MassRapidScreen,
@@ -562,7 +558,6 @@ impl PolicyId {
         PolicyId::AntigenScreening,
         PolicyId::MassRapidScreen,
         PolicyId::BorderControls,
-        PolicyId::WaterSanitation,
         PolicyId::DiscourageHosp,
         PolicyId::TravelBan,
         PolicyId::Quarantine,
@@ -579,7 +574,6 @@ impl PolicyId {
             Self::Quarantine => "Quarantine",
             Self::DiscourageHosp => "Discourage Hospitalization",
             Self::BorderControls => "Border Controls",
-            Self::WaterSanitation => "Water Sanitation",
             Self::BasicScreening => "Basic Screening",
             Self::AntigenScreening => "Antigen Screening",
             Self::MassRapidScreen => "Mass Rapid Screen",
@@ -598,7 +592,6 @@ impl PolicyId {
             Self::Quarantine => Some(Authority::Medium),
             Self::DiscourageHosp => Some(Authority::Low),
             Self::BorderControls => None,
-            Self::WaterSanitation => None,
             Self::BasicScreening => None,
             Self::AntigenScreening => Some(Authority::Low),
             Self::MassRapidScreen => Some(Authority::Medium),
@@ -930,9 +923,6 @@ pub struct RegionPolicy {
     /// Cheaper alternative to travel ban. Superseded by travel ban if both active.
     #[serde(default)]
     pub border_controls: bool,
-    /// Halves waterborne disease within-region spread. No effect on airborne/contact.
-    #[serde(default)]
-    pub water_sanitation: bool,
     /// Disease surveillance level — determines what fraction of infections
     /// are visible to the player and how quickly new diseases are detected.
     #[serde(default)]
@@ -960,11 +950,10 @@ pub struct RegionPolicy {
 /// Total number of policy types available per region.
 ///
 /// **Policy index mapping** (used across state.rs, engine/policy.rs, ui/policy.rs):
-///   0 = Travel Ban        5 = Basic Screening      8 = Martial Law
-///   1 = Quarantine         6 = Antigen Screening    9 = Nuclear Annihilation
-///   2 = Discourage Hosp.   7 = Mass Rapid Screen   10 = Field Hospital
-///   3 = Border Controls   11 = Rebuild Infrastructure
-///   4 = Water Sanitation
+///   0 = Travel Ban        4 = Basic Screening      7 = Martial Law
+///   1 = Quarantine         5 = Antigen Screening    8 = Nuclear Annihilation
+///   2 = Discourage Hosp.   6 = Mass Rapid Screen    9 = Field Hospital
+///   3 = Border Controls   10 = Rebuild Infrastructure
 ///
 /// Display position is determined by `PolicyId::DISPLAY_ORDER` (grouped by function).
 /// If you add a new policy, you must update:
@@ -972,7 +961,7 @@ pub struct RegionPolicy {
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
 ///   - render_manage policies vec (ui/policy.rs)
-pub const POLICY_COUNT: usize = 12;
+pub const POLICY_COUNT: usize = 11;
 
 /// Panel selection positions for the ManagePolicies subpanel.
 ///
@@ -1000,7 +989,7 @@ impl RegionPolicy {
     pub fn active_policy_costs(&self, traits: &[RegionTrait]) -> Vec<(PolicyId, f64)> {
         let mut costs = Vec::new();
         for id in [PolicyId::TravelBan, PolicyId::Quarantine, PolicyId::DiscourageHosp,
-                   PolicyId::BorderControls, PolicyId::WaterSanitation, PolicyId::MartialLaw] {
+                   PolicyId::BorderControls, PolicyId::MartialLaw] {
             if self.get_bool(id) {
                 costs.push((id, Self::bool_policy_cost(id, traits)));
             }
@@ -1019,7 +1008,6 @@ impl RegionPolicy {
             PolicyId::Quarantine => QUARANTINE_COST,
             PolicyId::DiscourageHosp => DISCOURAGE_HOSP_COST,
             PolicyId::BorderControls => BORDER_CONTROLS_COST,
-            PolicyId::WaterSanitation => WATER_SANITATION_COST,
             PolicyId::MartialLaw => MARTIAL_LAW_COST,
             _ => 0.0,
         }
@@ -1043,7 +1031,6 @@ impl RegionPolicy {
         if self.quarantine { cost += QUARANTINE_PERSONNEL; active_count += 1; }
         if self.discourage_hosp { cost += DISCOURAGE_HOSP_PERSONNEL; active_count += 1; }
         if self.border_controls { cost += BORDER_CONTROLS_PERSONNEL; active_count += 1; }
-        if self.water_sanitation { cost += WATER_SANITATION_PERSONNEL; active_count += 1; }
         if self.martial_law { cost += MARTIAL_LAW_PERSONNEL; active_count += 1; }
         let screening_cost = self.screening.personnel_cost();
         cost += screening_cost;
@@ -1054,7 +1041,7 @@ impl RegionPolicy {
 
     pub fn any_active(&self) -> bool {
         self.travel_ban || self.quarantine || self.discourage_hosp
-            || self.border_controls || self.water_sanitation
+            || self.border_controls
             || self.screening != ScreeningLevel::None
             || self.martial_law || self.nuclear_state.is_active()
     }
@@ -1067,7 +1054,6 @@ impl RegionPolicy {
         if self.quarantine { n += 1; }
         if self.discourage_hosp { n += 1; }
         if self.border_controls { n += 1; }
-        if self.water_sanitation { n += 1; }
         if self.martial_law { n += 1; }
         if self.screening != ScreeningLevel::None { n += 1; }
         n
@@ -1078,7 +1064,7 @@ impl RegionPolicy {
     pub fn is_active(&self, policy: PolicyId) -> bool {
         match policy {
             PolicyId::TravelBan | PolicyId::Quarantine | PolicyId::DiscourageHosp
-            | PolicyId::BorderControls | PolicyId::WaterSanitation
+            | PolicyId::BorderControls
             | PolicyId::MartialLaw | PolicyId::NuclearOption => self.get_bool(policy),
             PolicyId::BasicScreening => self.screening >= ScreeningLevel::Basic,
             PolicyId::AntigenScreening => self.screening >= ScreeningLevel::Antigen,
@@ -1092,7 +1078,6 @@ impl RegionPolicy {
         self.quarantine = false;
         self.discourage_hosp = false;
         self.border_controls = false;
-        self.water_sanitation = false;
         self.screening = ScreeningLevel::None;
         self.martial_law = false;
         self.auto_rebuild_infra = false;
@@ -1107,7 +1092,6 @@ impl RegionPolicy {
             PolicyId::Quarantine => self.quarantine,
             PolicyId::DiscourageHosp => self.discourage_hosp,
             PolicyId::BorderControls => self.border_controls,
-            PolicyId::WaterSanitation => self.water_sanitation,
             PolicyId::MartialLaw => self.martial_law,
             PolicyId::NuclearOption => self.nuclear_state.is_active(),
             _ => false,
@@ -1122,7 +1106,6 @@ impl RegionPolicy {
             PolicyId::Quarantine => self.quarantine = val,
             PolicyId::DiscourageHosp => self.discourage_hosp = val,
             PolicyId::BorderControls => self.border_controls = val,
-            PolicyId::WaterSanitation => self.water_sanitation = val,
             PolicyId::MartialLaw => self.martial_law = val,
             PolicyId::NuclearOption => {} // handled via nuclear_state directly
             _ => {}
@@ -2844,14 +2827,6 @@ impl TransmissionVector {
         }
     }
 
-    /// Infectivity multiplier when water sanitation is active.
-    /// Only waterborne diseases are affected.
-    pub fn water_sanitation_factor(&self) -> f64 {
-        match self {
-            TransmissionVector::Waterborne => 0.5,  // 50% reduction
-            _ => 1.0,                                // no effect
-        }
-    }
 }
 
 /// Stat ranges for procedural disease generation.

@@ -12,7 +12,7 @@ You've converged on this through trial and error. It's not the only viable strat
 
 **Opening moves (automatic):**
 1. Enable Broad-Spectrum auto-deploy immediately. This is non-negotiable — it's the cheapest, fastest disease suppression available and there's no reason not to have it running from turn one.
-2. Check the starting disease's transmission type. Airborne or Contact: enable Quarantine in the outbreak region. Waterborne: enable Water Sanitation there. Do not buy a Travel Ban early. Do not spend on Basic or Antigen Screening.
+2. Enable Quarantine in the outbreak region. Do not buy a Travel Ban early. Do not spend on Basic or Antigen Screening.
 3. Do not open with research. Broad-Spectrum buys time. Containment buys time. Research is how you win later, not how you survive now.
 
 **Early priorities:**

@@ -1988,27 +1988,16 @@ mod tests {
 
                 // --- POLICIES: containment and public health ---
                 // A competent player enables border controls immediately (cheap,
-                // always helps cross-region spread), enables water sanitation
-                // only when a waterborne disease is present (otherwise pure waste),
-                // quarantines infected regions.
-                let any_waterborne = state.diseases.iter().any(|d| {
-                    d.transmission == crate::state::TransmissionVector::Waterborne
-                });
+                // always helps cross-region spread), quarantines infected regions.
                 for r_idx in 0..state.regions.len() {
                     if state.regions[r_idx].collapsed { continue; }
                     let total_infected: f64 = state.regions[r_idx].infections.iter()
                         .map(|inf| inf.infected).sum();
                     let has_border = state.policies[r_idx].border_controls;
-                    let has_water = state.policies[r_idx].water_sanitation;
                     let has_quarantine = state.policies[r_idx].quarantine;
                     if !has_border {
                         execute_command(&mut state, &GameCommand::TogglePolicy {
                             region_idx: r_idx, policy: PolicyId::BorderControls,
-                        });
-                    }
-                    if !has_water && any_waterborne {
-                        execute_command(&mut state, &GameCommand::TogglePolicy {
-                            region_idx: r_idx, policy: PolicyId::WaterSanitation,
                         });
                     }
                     if !has_quarantine && total_infected > 10_000.0 {
@@ -3179,45 +3168,6 @@ mod tests {
         assert!(controls_spreads < no_policy_spreads,
             "border controls should reduce cross-region spread: {} vs {} (no policy)",
             controls_spreads, no_policy_spreads);
-    }
-
-    #[test]
-    fn water_sanitation_reduces_waterborne_within_region_spread() {
-        use crate::state::TransmissionVector;
-        let mut state = AppState::new_default(42);
-        let region_idx = primary_outbreak_region(&state);
-
-        state.diseases[0].transmission = TransmissionVector::Waterborne;
-        state.diseases[0].within_region_spread = 0.02;
-        state.regions[region_idx].get_or_create_infection(0).infected = 1000.0;
-
-        // Without sanitation
-        let (no_sanitation, _) = tick(&state);
-        let s = no_sanitation.regions[region_idx].disease_state(0).unwrap();
-        let inf_no = s.exposed + s.infected;
-
-        // With sanitation
-        state.policies[region_idx].water_sanitation = true;
-        let (with_sanitation, _) = tick(&state);
-        let s = with_sanitation.regions[region_idx].disease_state(0).unwrap();
-        let inf_with = s.exposed + s.infected;
-
-        assert!(inf_with < inf_no,
-            "water sanitation should reduce waterborne infections: {} vs {}",
-            inf_with, inf_no);
-
-        // Sanitation should NOT affect airborne diseases
-        state.diseases[0].transmission = TransmissionVector::Airborne;
-        let (airborne_with_sanitation, _) = tick(&state);
-        state.policies[region_idx].water_sanitation = false;
-        let (airborne_without, _) = tick(&state);
-        let inf_airborne_with = airborne_with_sanitation.regions[region_idx].disease_state(0).unwrap().infected;
-        let inf_airborne_without = airborne_without.regions[region_idx].disease_state(0).unwrap().infected;
-
-        // Should be roughly equal (same noise seed means identical)
-        assert!((inf_airborne_with - inf_airborne_without).abs() < 1.0,
-            "sanitation should not affect airborne: {} vs {}",
-            inf_airborne_with, inf_airborne_without);
     }
 
     #[test]

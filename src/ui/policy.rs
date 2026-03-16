@@ -15,7 +15,6 @@ use crate::state::{
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
     DISCOURAGE_HOSP_COST, DISCOURAGE_HOSP_PERSONNEL, HOSPITAL_EXPOSURE_FACTOR,
     BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
-    WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
@@ -138,9 +137,6 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
         (PolicyId::BorderControls, "Border Controls", policy.border_controls,
          format!("¥{:.0}/day + {} pers.", BORDER_CONTROLS_COST * spec_mult * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
          "Blocks 30% cross-region spread", Some(BORDER_CONTROLS_PERSONNEL + infra_extra), BORDER_CONTROLS_COST * spec_mult),
-        (PolicyId::WaterSanitation, "Water Sanitation", policy.water_sanitation,
-         format!("¥{:.0}/day + {} pers.", WATER_SANITATION_COST * spec_mult * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL + infra_extra),
-         "50% waterborne spread reduction within the region", Some(WATER_SANITATION_PERSONNEL + infra_extra), WATER_SANITATION_COST * spec_mult),
         (PolicyId::BasicScreening, "Basic Screening", policy.screening == ScreeningLevel::Basic,
          format!("¥{:.0}/day + {} pers.", SCREENING_BASIC_COST * spec_mult * TICKS_PER_DAY, 1 + infra_extra),
          "40% visible, 10% all spread reduction, 75% dose targeting, 30% faster detection (~4 day ramp-up)", Some(1 + infra_extra), SCREENING_BASIC_COST * spec_mult),
@@ -723,7 +719,7 @@ pub(crate) fn render_region_select(state: &AppState, title: &str, action: &str, 
 /// Shows per-disease reduction percentages based on transmission vector.
 fn effectiveness_hint(state: &AppState, region_idx: usize, policy: PolicyId) -> Option<Line<'static>> {
     // Only transmission-sensitive policies get hints
-    if !matches!(policy, PolicyId::TravelBan | PolicyId::Quarantine | PolicyId::DiscourageHosp | PolicyId::WaterSanitation) {
+    if !matches!(policy, PolicyId::TravelBan | PolicyId::Quarantine | PolicyId::DiscourageHosp) {
         return None;
     }
 
@@ -774,17 +770,6 @@ fn effectiveness_hint(state: &AppState, region_idx: usize, policy: PolicyId) -> 
             PolicyId::DiscourageHosp => { // removes hospital exposure
                 let reduction = (1.0 - 1.0 / HOSPITAL_EXPOSURE_FACTOR) * gov_eff * 100.0;
                 (format!("{name} ({}, -{reduction:.0}% within-region spread)", vector.label()), Color::Green)
-            }
-            PolicyId::WaterSanitation => {
-                match vector {
-                    TransmissionVector::Waterborne => {
-                        let reduction = 0.5 * gov_eff * 100.0;
-                        (format!("{name} (waterborne, -{reduction:.0}%)"), Color::Green)
-                    }
-                    _ => {
-                        (format!("{name} ({}, no effect)", vector.label()), Color::DarkGray)
-                    }
-                }
             }
             _ => unreachable!(),
         };
@@ -849,17 +834,6 @@ fn impact_estimate(state: &AppState, region_idx: usize, policy: PolicyId) -> Opt
             PolicyId::BorderControls => {
                 // cross-region spread prevention — hard to estimate
                 return None;
-            }
-            PolicyId::WaterSanitation => {
-                // infections prevented for waterborne diseases
-                if susceptible > 0.0 {
-                    let factor = disease.transmission.water_sanitation_factor();
-                    if factor < 1.0 {
-                        let prevented = inf.infected * disease.within_region_spread * (1.0 - factor) * gov_eff * (susceptible / pop);
-                        total_impact += prevented;
-                    }
-                }
-                impact_type = "infections";
             }
             PolicyId::FieldHospital => {
                 // deaths prevented by lethality reduction

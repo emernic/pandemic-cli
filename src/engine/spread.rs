@@ -42,7 +42,6 @@ pub(super) fn tick_spread_within(
         let policy = new.policies.get(region_idx);
         let quarantine_active = policy.is_some_and(|p| p.quarantine);
         let discourage_hosp = policy.is_some_and(|p| p.discourage_hosp);
-        let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
         let gov_eff = region.policy_effectiveness();
         let alive = (pop - region.dead).max(0.0);
 
@@ -80,10 +79,6 @@ pub(super) fn tick_spread_within(
                     // Gov effectiveness: partial exposure remains with weak governors
                     let effective = 1.0 + (HOSPITAL_EXPOSURE_FACTOR - 1.0) * (1.0 - gov_eff);
                     spread_rate *= effective;
-                }
-                if sanitation_active {
-                    let f = disease.transmission.water_sanitation_factor();
-                    spread_rate *= scale_policy_factor(f, gov_eff);
                 }
                 // Screening identifies and isolates cases, reducing spread
                 let screening_factor = policy

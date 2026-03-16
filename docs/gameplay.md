@@ -54,7 +54,6 @@ Regional policies, toggled per-region. Each costs funding and personnel:
 - **Quarantine** — halves infection rate within region
 - **Discourage Hospitalization** — reduces spread 20% but +50% lethality (no hospital care)
 - **Border Controls** — lighter version of travel ban (50% cross-region reduction)
-- **Water Sanitation** — halves waterborne disease spread
 - **Disease Screening** — tiered (Basic → Antigen → Mass Rapid), affects disease detection visibility
 - **Martial Law** — heavy-handed control, reduces collapse threshold, high cost
 - **Field Hospital / Medical Center** — permanent infrastructure upgrade (two tiers: Field Hospital reduces lethality, Medical Center adds medicine efficacy bonus)
