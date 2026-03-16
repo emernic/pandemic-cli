@@ -103,7 +103,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     // Disease spread and variant spawning
     spread::tick_spread_within(&mut new, &state.diseases, &mut rng_spread);
     spread::tick_spread_cross_region(&mut new, &state.diseases, &mut rng_spread, &mut events);
-    spread::tick_horizontal_gene_transfer(&mut new, &mut events);
+    spread::tick_horizontal_gene_transfer(&mut new);
     disease::tick_variant_spawning(&mut new, &mut rng_spread, &mut events);
 
     // Research progress
@@ -115,7 +115,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     screening::tick_screening(&mut new, &mut events);
 
     // Reactor manufacturing progress
-    reactor::tick_reactors(&mut new, &mut events);
+    reactor::tick_reactors(&mut new);
 
     // Auto-deploy medicines to worst-affected regions
     medicine::try_auto_deploy(&mut new, &mut events);
@@ -127,7 +127,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     infrastructure::tick_infrastructure(&mut new, &mut events);
 
     // Crisis operations — temporary personnel commitments from crisis resolutions.
-    crisis::tick_crisis_operations(&mut new, &mut events);
+    crisis::tick_crisis_operations(&mut new);
 
     // Nuclear state transitions — land nukes that have reached their hit tick.
     policy::tick_nuclear(&mut new, &mut events);
@@ -150,16 +150,16 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     policy::tick_governor_actions(&mut new, &mut events);
 
     // Standing orders — auto-enable policies when severity thresholds are crossed.
-    let gdp_regions = policy::tick_standing_orders(&mut new, &mut events);
+    let gdp_regions = policy::tick_standing_orders(&mut new);
     for r_idx in gdp_regions {
         board::on_gdp_policy_enacted(&mut new, r_idx);
     }
 
     // Auto-rebuild infrastructure for regions with the toggle enabled.
-    policy::tick_auto_rebuild(&mut new, &mut events);
+    policy::tick_auto_rebuild(&mut new);
 
     // Auto-negotiate with governors when cooperation drops below threshold.
-    policy::tick_auto_negotiate(&mut new, &mut events);
+    policy::tick_auto_negotiate(&mut new);
 
     // Screening infrastructure — update progress ramp-up and estimated infection counts.
     // Must run after spread (so real values are current) and after policy costs
@@ -176,7 +176,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     contracts::tick_check_contracts(&mut new, &mut events);
     contracts::tick_offer_contracts(&mut new, &mut rng_misc, &mut events);
     contracts::tick_loyalty_raises(&mut new, &mut rng_misc);
-    contracts::tick_patron_bonuses(&mut new, &mut rng_misc, &mut events);
+    contracts::tick_patron_bonuses(&mut new, &mut rng_misc);
 
     // Corporate finances — update revenue, drain reserves, bankrupt failing corps.
     corporations::tick_corporations(&mut new, &mut rng_misc, &mut events);
@@ -341,14 +341,6 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
                     let current = new.diseases[disease_idx].knowledge;
                     if current < crate::state::KNOWLEDGE_NAME {
                         new.diseases[disease_idx].knowledge = crate::state::KNOWLEDGE_NAME;
-                        events.push(GameEvent::IntelAnalysis {
-                            disease_idx,
-                            message: format!(
-                                "INTEL: Pathogen identified — {} ({})",
-                                new.diseases[disease_idx].name,
-                                new.diseases[disease_idx].pathogen_type.label(),
-                            ),
-                        });
                     }
                 }
                 events.push(GameEvent::DiseaseDetected { disease_idx, silent_days });
@@ -411,30 +403,6 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
         // Grow tracking vec if new diseases were spawned
         while new.intel_pre_detection_briefed.len() < new.diseases.len() {
             new.intel_pre_detection_briefed.push(false);
-        }
-        for (d_idx, disease) in new.diseases.iter().enumerate() {
-            if disease.detected || new.intel_pre_detection_briefed[d_idx] {
-                continue;
-            }
-            for region in &new.regions {
-                if region.intel_level < 2 {
-                    continue;
-                }
-                let local: f64 = region.infections.iter()
-                    .filter(|inf| inf.disease_idx == d_idx)
-                    .map(|inf| inf.infected)
-                    .sum();
-                if local >= 500.0 {
-                    new.intel_pre_detection_briefed[d_idx] = true;
-                    events.push(GameEvent::IntelBriefing {
-                        message: format!(
-                            "INTEL: {} anomalous hospital admissions. Possible emerging pathogen, monitoring closely.",
-                            region.name
-                        ),
-                    });
-                    break;
-                }
-            }
         }
     }
 
@@ -652,14 +620,6 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
         if deaths_this_tick > 0.0 {
             new.regions[i].dead += deaths_this_tick;
             new.regions[i].collapse_deaths += deaths_this_tick;
-            // Log once per day (on the tick boundary)
-            if new.tick % (TICKS_PER_DAY as u64) == 0 {
-                let daily_deaths = deaths_this_tick * TICKS_PER_DAY;
-                events.push(GameEvent::CollapseSecondaryDeaths {
-                    region_idx: i,
-                    deaths: daily_deaths,
-                });
-            }
         }
     }
 
@@ -819,10 +779,8 @@ pub struct CommandResult {
 
 /// Dispatch cross-subsystem effects from crisis resolution.
 /// Called from both `execute_command` (manual) and `tick` (auto-resolve).
-/// When auto-resolving, updates the CrisisAutoResolved event message with the
-/// richer message from the subsystem (e.g. contract details).
-fn dispatch_crisis_post_action(state: &mut WorldState, post_action: crisis::CrisisPostAction, events: &mut Vec<GameEvent>) -> Option<String> {
-    let msg = match post_action {
+fn dispatch_crisis_post_action(state: &mut WorldState, post_action: crisis::CrisisPostAction, _events: &mut Vec<GameEvent>) -> Option<String> {
+    match post_action {
         crisis::CrisisPostAction::None => None,
         crisis::CrisisPostAction::AcceptContract => {
             let (_, msg) = contracts::accept_contract(state);
@@ -836,19 +794,7 @@ fn dispatch_crisis_post_action(state: &mut WorldState, post_action: crisis::Cris
             contracts::cancel_contract(state, board_member_idx);
             None
         }
-    };
-    // If the dispatch produced a richer message, update the most recent
-    // CrisisAutoResolved event so the event log shows contract details
-    // rather than the generic placeholder from crisis.rs.
-    if let Some(ref m) = msg {
-        for event in events.iter_mut().rev() {
-            if let GameEvent::CrisisAutoResolved { message } = event {
-                *message = m.clone();
-                break;
-            }
-        }
     }
-    msg
 }
 
 /// Execute a game command. Pure game logic — does NOT touch UI state.
@@ -865,7 +811,7 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
             target,
         } => {
             let (success, msg) =
-                medicine::deploy_medicine(state, *medicine_idx, *region_idx, target.clone(), &mut events);
+                medicine::deploy_medicine(state, *medicine_idx, *region_idx, target.clone());
             CommandResult { message: msg, success, events: Vec::new() }
         }
         GameCommand::StartResearch { kind, double_personnel } => {
@@ -1552,7 +1498,6 @@ mod tests {
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, 0, ri,
             DeployTarget { disease_idx: 0 },
-            &mut events,
         );
         assert!(ok, "deployment should succeed");
 
@@ -1593,7 +1538,6 @@ mod tests {
         let funding_before = state.resources.funding;
         let (ok, msg) = medicine::deploy_medicine(
             &mut state, 0, ri, DeployTarget { disease_idx: 0 },
-            &mut events,
         );
         assert!(!ok, "should fail when empty");
         assert_eq!(state.resources.funding, funding_before, "should not charge when empty");
@@ -1630,7 +1574,6 @@ mod tests {
         let (ok, msg) = medicine::deploy_medicine(
             &mut state, 0, 0,
             DeployTarget { disease_idx: 0 },
-            &mut events,
         );
         assert!(!ok, "deploy should fail when no infected targets");
         assert_eq!(state.resources.funding, funding_before, "should not charge on failure");
@@ -1727,7 +1670,6 @@ mod tests {
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, med_idx, 0,
             DeployTarget { disease_idx: 0 },
-            &mut events,
         );
         assert!(ok, "multi-target tested medicine should deploy successfully");
         assert!(state.medicines[med_idx].doses < doses_before, "doses should be consumed");
@@ -1747,7 +1689,6 @@ mod tests {
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, med_idx, 0,
             DeployTarget { disease_idx: 0 },
-            &mut events,
         );
         // The engine allows deploying untested medicines — no confirmation step needed
         assert!(ok, "untested medicine should deploy via engine API");
@@ -1769,7 +1710,6 @@ mod tests {
         // Deploy directly via engine API — tested medicine should succeed
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, 0, ri, DeployTarget { disease_idx: 0 },
-            &mut events,
         );
         assert!(ok, "tested medicine should deploy immediately");
         assert_eq!(state.resources.funding, funding_before, "deploy should be free");
@@ -2473,7 +2413,6 @@ mod tests {
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, 0, 0,
             DeployTarget { disease_idx: 0 },
-            &mut events,
         );
         assert!(ok, "deployment should succeed despite travel ban");
         assert_eq!(state.pending_shipments.len(), 1);
@@ -2815,7 +2754,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick.clear();
-            let (_, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget { disease_idx }, &mut events);
+            let (_, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget { disease_idx });
             // Advance time to deliver this shipment
             state.tick = (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
             { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
@@ -2841,7 +2780,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick.clear();
-            let (_, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget { disease_idx }, &mut events);
+            let (_, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget { disease_idx });
             state.tick = base_tick + (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
             { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
         }
@@ -3657,24 +3596,14 @@ mod tests {
         // Set auto-resolve preference for personnel crises: always pick option A
         state.auto_resolve_crises.insert("personnel".to_string(), 0);
 
-        // Run until a crisis would generate
-        let mut auto_resolved = false;
+        // Run ticks. Personnel crises should auto-resolve silently — they
+        // should never appear as active_crisis. Any active crisis must be
+        // a non-personnel type.
         for _ in 0..5000 {
-            let tick_events;
-            { let r = tick(&state); state = state.with_world(r.0); tick_events = r.1; }
-            // If a personnel crisis auto-resolved, the game isn't in Event state
-            // (it may be Paused from a DiseaseDetected in the same tick, which is fine)
-            if tick_events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved { .. })) {
-                auto_resolved = true;
-                assert!(state.active_crisis.is_none(),
-                    "crisis should be resolved immediately");
-                assert!(!state.is_blocked() || state.outcome != GameOutcome::Playing,
-                    "game should not be blocked after auto-resolve (unless game over)");
-                break;
-            }
-            // If a non-personnel crisis fires, it should pause normally
+            let (world, _events) = tick(&state);
+            state = state.with_world(world);
             if state.active_crisis.is_some() {
-                // Dismiss it manually to continue
+                // Any active crisis must NOT be personnel (it was auto-resolved)
                 let crisis_tag = state.active_crisis.as_ref().unwrap().kind.tag().to_string();
                 assert_ne!(crisis_tag, "personnel",
                     "personnel crisis should have been auto-resolved");
@@ -3683,11 +3612,6 @@ mod tests {
             if state.outcome != GameOutcome::Playing {
                 break;
             }
-        }
-        // We may not get a personnel crisis in 5000 ticks — that's OK.
-        // The test verifies correctness IF it fires, not that it fires.
-        if auto_resolved {
-            // Good — verified auto-resolve works
         }
     }
 
@@ -4006,12 +3930,10 @@ mod tests {
         assert!(after.regions[0].collapsed, "region should collapse");
         assert!(after.pending_crises.iter().any(|k| matches!(k, CrisisKind::RefugeeWave { .. })),
             "refugee crisis should be pending after collapse");
-        // Second tick: pending crisis fires and auto-resolves
-        let (after2, tick_events) = tick(&after);
+        // Second tick: pending crisis fires and auto-resolves silently
+        let (after2, _tick_events) = tick(&after);
         assert!(after2.active_crisis.is_none(),
             "refugee crisis should be auto-resolved, not left active");
-        assert!(tick_events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved { .. })),
-            "CrisisAutoResolved event should be emitted");
     }
 
 
@@ -4129,19 +4051,14 @@ mod tests {
         // After 2 days of ticking, operation completes and personnel return
         let mut state2 = after;
         let ticks_needed = (2.0 * TICKS_PER_DAY).ceil() as u32;
-        let mut all_tick_events = Vec::new();
         for _ in 0..ticks_needed {
-            let tick_events;
-            { let r = tick(&state2); state2 = state2.with_world(r.0); tick_events = r.1; }
-            all_tick_events.extend(tick_events);
+            let r = tick(&state2);
+            state2 = state2.with_world(r.0);
         }
         assert_eq!(state2.crisis_operations.len(), 0,
             "crisis operation should complete after duration");
         assert_eq!(state2.personnel_available(), before_personnel,
             "personnel should be returned after operation completes");
-        assert!(all_tick_events.iter().any(|e| matches!(e,
-            crate::state::GameEvent::CrisisTeamReturned { personnel: 2, .. }
-        )), "should fire CrisisTeamReturned event");
     }
 
     #[test]
@@ -4312,7 +4229,7 @@ mod tests {
 
         // First deploy should succeed
         let treat = DeployTarget { disease_idx };
-        let (nav, msg) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone(), &mut events);
+        let (nav, msg) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(nav, "first deploy should succeed");
         assert!(msg.unwrap().contains("Shipped"), "should show shipment message");
 
@@ -4322,7 +4239,7 @@ mod tests {
         // Second deploy at same tick should be blocked
         state.resources.funding = 1_000_000.0;
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
-        let (nav2, msg2) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone(), &mut events);
+        let (nav2, msg2) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(!nav2, "second deploy should be blocked by cooldown");
         assert!(msg2.unwrap().contains("cooldown"), "should mention cooldown");
 
@@ -4330,7 +4247,7 @@ mod tests {
         state.tick = crate::state::DEPLOY_COOLDOWN_TICKS + 1;
         state.resources.funding = 1_000_000.0;
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
-        let (nav3, msg3) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone(), &mut events);
+        let (nav3, msg3) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(nav3, "deploy after cooldown should succeed");
         assert!(msg3.unwrap().contains("Shipped"));
 
@@ -4339,7 +4256,7 @@ mod tests {
         state.regions[0].last_deploy_tick.insert(med_idx, 0);
         state.regions[1].get_or_create_infection(disease_idx).infected = 50_000.0;
         state.resources.funding = 1_000_000.0;
-        let (nav4, _) = medicine::deploy_medicine(&mut state, med_idx, 1, treat.clone(), &mut events);
+        let (nav4, _) = medicine::deploy_medicine(&mut state, med_idx, 1, treat.clone());
         assert!(nav4, "deploying to different region should work during cooldown");
     }
 
@@ -4546,25 +4463,16 @@ mod tests {
         // Enable deploy for medicine 0
         state.deploy_enabled = vec![true];
 
-        let (after, tick_events) = tick(&state);
+        let (after, _tick_events) = tick(&state);
 
-        // Should have auto-deployed (MedicineShipped fires on success)
-        let shipped_events: Vec<_> = tick_events.iter()
-            .filter(|e| matches!(e, GameEvent::MedicineShipped { .. }))
-            .collect();
-        assert_eq!(shipped_events.len(), 1, "should auto-deploy exactly once per tick");
-
-        // Should target region 1 (worst infected)
-        match &shipped_events[0] {
-            GameEvent::MedicineShipped { region_idx, .. } => {
-                assert_eq!(*region_idx, 1, "should deploy to worst-affected region");
-            }
-            _ => unreachable!(),
-        }
-
-        // Doses should have been consumed
+        // Should have auto-deployed — doses consumed and a pending shipment created
         assert!(after.medicines[0].doses < state.medicines[0].doses,
             "doses should be consumed by auto-deploy");
+        assert!(!after.pending_shipments.is_empty(), "should have a pending shipment");
+
+        // Should target region 1 (worst infected)
+        assert_eq!(after.pending_shipments[0].region_idx, 1,
+            "should deploy to worst-affected region");
     }
 
     #[test]
@@ -4581,13 +4489,11 @@ mod tests {
         state.regions[0].get_or_create_infection(0).infected = 100_000.0;
         state.deploy_enabled = vec![true];
 
-        let (_, tick_events) = tick(&state);
+        let (after, _tick_events) = tick(&state);
 
-        // Should NOT auto-deploy untested medicines
-        let shipped: Vec<_> = tick_events.iter()
-            .filter(|e| matches!(e, GameEvent::MedicineShipped { .. }))
-            .collect();
-        assert!(shipped.is_empty(), "should not auto-deploy untested medicines");
+        // Should NOT auto-deploy untested medicines — no new shipments
+        let new_shipments = after.pending_shipments.len() - state.pending_shipments.len();
+        assert_eq!(new_shipments, 0, "should not auto-deploy untested medicines");
     }
 
     #[test]
@@ -4608,12 +4514,10 @@ mod tests {
         state.regions[0].last_deploy_tick.insert(0, current_tick);
         state.deploy_enabled = vec![true];
 
-        let (_, tick_events) = tick(&state);
+        let (after, _tick_events) = tick(&state);
 
-        let shipped: Vec<_> = tick_events.iter()
-            .filter(|e| matches!(e, GameEvent::MedicineShipped { .. }))
-            .collect();
-        assert!(shipped.is_empty(), "should not deploy to region on cooldown");
+        let new_shipments = after.pending_shipments.len() - state.pending_shipments.len();
+        assert_eq!(new_shipments, 0, "should not deploy to region on cooldown");
     }
 
 
@@ -4635,7 +4539,7 @@ mod tests {
         // Baseline: full infrastructure, deploy and deliver
         let mut baseline = state.clone();
         let target = crate::state::DeployTarget { disease_idx: 0 };
-        medicine::deploy_medicine(&mut baseline, 0, ri, target.clone(), &mut events);
+        medicine::deploy_medicine(&mut baseline, 0, ri, target.clone());
         assert_eq!(baseline.pending_shipments.len(), 1);
         baseline.tick += crate::state::SHIPPING_TICKS + 1;
         { let mut rng = baseline.rng_misc.clone(); medicine::tick_shipments(&mut baseline, &mut rng, &mut events); }
@@ -4646,7 +4550,7 @@ mod tests {
         degraded.regions[ri].supply_lines = 0.50;
         degraded.regions[ri].healthcare_capacity = 0.50;
         let target = crate::state::DeployTarget { disease_idx: 0 };
-        medicine::deploy_medicine(&mut degraded, 0, ri, target, &mut events);
+        medicine::deploy_medicine(&mut degraded, 0, ri, target);
         assert_eq!(degraded.pending_shipments.len(), 1);
         degraded.tick += crate::state::SHIPPING_TICKS + 1;
         { let mut rng = degraded.rng_misc.clone(); medicine::tick_shipments(&mut degraded, &mut rng, &mut events); }
@@ -4675,7 +4579,7 @@ mod tests {
         state.regions[ri].healthcare_capacity = 0.70;
 
         let target = crate::state::DeployTarget { disease_idx: 0 };
-        medicine::deploy_medicine(&mut state, 0, ri, target, &mut events);
+        medicine::deploy_medicine(&mut state, 0, ri, target);
         state.tick += crate::state::SHIPPING_TICKS + 1;
         { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
 
@@ -4709,7 +4613,7 @@ mod tests {
         // No screening: targeting_efficiency = 0.50
         assert_eq!(state.policies[ri].screening, ScreeningLevel::None);
         let target = crate::state::DeployTarget { disease_idx: 0 };
-        medicine::deploy_medicine(&mut state, 0, ri, target.clone(), &mut events);
+        medicine::deploy_medicine(&mut state, 0, ri, target.clone());
         state.tick += crate::state::SHIPPING_TICKS + 1;
         { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
 
@@ -4737,7 +4641,7 @@ mod tests {
         state.medicines[0].doses = state.medicines[0].max_doses;
         events.clear();
 
-        medicine::deploy_medicine(&mut state, 0, ri, target, &mut events);
+        medicine::deploy_medicine(&mut state, 0, ri, target);
         state.tick += crate::state::SHIPPING_TICKS + 1;
         { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
 
@@ -5608,11 +5512,8 @@ mod tests {
             new.diseases[0].knowledge
         );
 
-        // Should have an IntelAnalysis event
-        let has_intel_analysis = tick_events.iter().any(|e| {
-            matches!(e, GameEvent::IntelAnalysis { .. })
-        });
-        assert!(has_intel_analysis, "should generate an IntelAnalysis event");
+        // IntelAnalysis event was removed (non-actionable noise).
+        // The knowledge boost is the actionable outcome, verified above.
     }
 
     #[test]

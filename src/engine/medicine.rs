@@ -19,7 +19,6 @@ pub(super) fn deploy_medicine(
     medicine_idx: usize,
     region_idx: usize,
     target: DeployTarget,
-    events: &mut Vec<GameEvent>,
 ) -> (bool, Option<String>) {
     // Block after game over
     if state.outcome != GameOutcome::Playing {
@@ -93,8 +92,6 @@ pub(super) fn deploy_medicine(
         doses: doses_to_ship,
         arrive_tick,
     });
-    events.push(GameEvent::MedicineShipped { medicine_idx, region_idx, doses: doses_to_ship });
-
     let doses_str = crate::format_number(doses_to_ship);
     let days = (SHIPPING_TICKS as f64 * supply_mult * logistics_mult * pharma_mult) / crate::state::TICKS_PER_DAY;
     let efficiency = state.regions[region_idx].delivery_efficiency();
@@ -465,8 +462,7 @@ pub(super) fn try_auto_deploy(state: &mut WorldState, events: &mut Vec<GameEvent
                 disease_idx: best_disease_idx,
             };
 
-            // deploy_medicine() fires MedicineShipped on success
-            deploy_medicine(state, med_idx, region_idx, target, events);
+            deploy_medicine(state, med_idx, region_idx, target);
         } else {
             // No valid target found. We intentionally emit `DeployBlocked`
             // from world facts here and let `events::process_events()` dedupe

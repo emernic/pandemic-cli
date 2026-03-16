@@ -1157,7 +1157,7 @@ pub(super) fn enact_decree(state: &mut WorldState, decree: DecreeId, region_idx:
 /// provided the policy isn't already active and the player has the
 /// required chairman approval and personnel.
 /// Returns region indices where GDP-hurting policies were enacted (for board notification).
-pub(super) fn tick_standing_orders(state: &mut WorldState, events: &mut Vec<GameEvent>) -> Vec<usize> {
+pub(super) fn tick_standing_orders(state: &mut WorldState) -> Vec<usize> {
     // Affordability guard: don't try to auto-enable policies when the player can't
     // sustain the current cost load. Prevents oscillation where cost enforcement
     // suspends a policy and this function immediately re-enables it.
@@ -1179,17 +1179,6 @@ pub(super) fn tick_standing_orders(state: &mut WorldState, events: &mut Vec<Game
             let (_, ok, gdp_region) = toggle_policy(state, region_idx, PolicyId::Quarantine);
             if ok {
                 if let Some(r) = gdp_region { gdp_regions.push(r); }
-                let region_name = state.regions[region_idx].name.clone();
-                let conflicts = conflicting_contract_names(state, PolicyId::Quarantine);
-                let suffix = if conflicts.is_empty() {
-                    String::new()
-                } else {
-                    format!(" (violates {})", conflicts.join(", "))
-                };
-                events.push(GameEvent::PolicyAutoActivated {
-                    region_idx,
-                    policy_name: format!("Quarantine in {region_name}{suffix}"),
-                });
             }
         }
 
@@ -1202,17 +1191,6 @@ pub(super) fn tick_standing_orders(state: &mut WorldState, events: &mut Vec<Game
             let (_, ok, gdp_region) = toggle_policy(state, region_idx, PolicyId::TravelBan);
             if ok {
                 if let Some(r) = gdp_region { gdp_regions.push(r); }
-                let region_name = state.regions[region_idx].name.clone();
-                let conflicts = conflicting_contract_names(state, PolicyId::TravelBan);
-                let suffix = if conflicts.is_empty() {
-                    String::new()
-                } else {
-                    format!(" (violates {})", conflicts.join(", "))
-                };
-                events.push(GameEvent::PolicyAutoActivated {
-                    region_idx,
-                    policy_name: format!("Travel Ban in {region_name}{suffix}"),
-                });
             }
         }
     }
@@ -1221,7 +1199,7 @@ pub(super) fn tick_standing_orders(state: &mut WorldState, events: &mut Vec<Game
 
 /// Auto-rebuild infrastructure for regions with auto_rebuild_infra enabled.
 /// Fires once per day (every TICKS_PER_DAY ticks) when any infra stat drops below threshold.
-pub(super) fn tick_auto_rebuild(state: &mut WorldState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_auto_rebuild(state: &mut WorldState) {
     // Only fire once per day to avoid draining funds every tick
     if state.tick % (TICKS_PER_DAY as u64) != 0 {
         return;
@@ -1239,22 +1217,14 @@ pub(super) fn tick_auto_rebuild(state: &mut WorldState, events: &mut Vec<GameEve
             || region.supply_lines < REBUILD_INFRA_AUTO_THRESHOLD
             || region.civil_order < REBUILD_INFRA_AUTO_THRESHOLD;
         if needs_repair {
-            let (msg, ok) = rebuild_infrastructure(state, region_idx);
-            if ok {
-                if let Some(m) = msg {
-                    events.push(GameEvent::PolicyAutoActivated {
-                        region_idx,
-                        policy_name: format!("Auto-rebuild: {}", m),
-                    });
-                }
-            }
+            let (_msg, _ok) = rebuild_infrastructure(state, region_idx);
         }
     }
 }
 
 /// Auto-negotiate with governors when cooperation drops below threshold.
 /// Fires once per day (every TICKS_PER_DAY ticks).
-pub(super) fn tick_auto_negotiate(state: &mut WorldState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_auto_negotiate(state: &mut WorldState) {
     use crate::state::{TICKS_PER_DAY, AUTO_NEGOTIATE_THRESHOLD};
 
     if state.tick % (TICKS_PER_DAY as u64) != 0 {
@@ -1272,15 +1242,7 @@ pub(super) fn tick_auto_negotiate(state: &mut WorldState, events: &mut Vec<GameE
             continue;
         }
         if state.regions[region_idx].governor.cooperation < AUTO_NEGOTIATE_THRESHOLD {
-            let (msg, ok) = negotiate_governor(state, region_idx);
-            if ok {
-                if let Some(m) = msg {
-                    events.push(GameEvent::PolicyAutoActivated {
-                        region_idx,
-                        policy_name: format!("Auto-negotiate: {}", m),
-                    });
-                }
-            }
+            let (_msg, _ok) = negotiate_governor(state, region_idx);
         }
     }
 }
@@ -2135,7 +2097,6 @@ mod tests {
 
     #[test]
     fn standing_order_auto_quarantine_fires_at_high() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
@@ -2144,11 +2105,9 @@ mod tests {
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_HIGH + 1.0;
         assert!(!state.policies[0].quarantine, "Quarantine should not be active yet");
 
-        tick_standing_orders(&mut state, &mut events);
+        tick_standing_orders(&mut state);
 
         assert!(state.policies[0].quarantine, "Standing order should have enabled quarantine");
-        assert!(events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
-            "PolicyAutoActivated event should have fired");
     }
 
     #[test]
@@ -2161,31 +2120,27 @@ mod tests {
         // Below HIGH severity
         state.regions[0].get_or_create_infection(0).infected = 100.0;
 
-        tick_standing_orders(&mut state, &mut events);
+        tick_standing_orders(&mut state);
 
         assert!(!state.policies[0].quarantine, "Quarantine should not fire below HIGH threshold");
     }
 
     #[test]
     fn standing_order_auto_quarantine_skips_already_active() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
         state.policies[0].quarantine = true; // already active
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_HIGH + 1.0;
 
-        tick_standing_orders(&mut state, &mut events);
+        tick_standing_orders(&mut state);
 
         // Should not have toggled (would disable it — we only auto-enable)
         assert!(state.policies[0].quarantine, "Should not disable already-active quarantine");
-        assert!(!events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
-            "Should not fire event for already-active policy");
     }
 
     #[test]
     fn standing_order_auto_travel_ban_fires_at_crit() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_travel_ban_at_crit = true;
@@ -2193,26 +2148,22 @@ mod tests {
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         assert!(!state.policies[0].travel_ban);
 
-        tick_standing_orders(&mut state, &mut events);
+        tick_standing_orders(&mut state);
 
         assert!(state.policies[0].travel_ban, "Standing order should have enabled travel ban");
-        assert!(events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
-            "PolicyAutoActivated event should have fired");
     }
 
     #[test]
     fn standing_order_disabled_does_not_fire() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         // Both standing orders OFF (default)
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
-        tick_standing_orders(&mut state, &mut events);
+        tick_standing_orders(&mut state);
 
         assert!(!state.policies[0].quarantine);
         assert!(!state.policies[0].travel_ban);
-        assert!(!events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })));
     }
 
     #[test]
@@ -2243,7 +2194,6 @@ mod tests {
 
     #[test]
     fn standing_order_auto_activation_warns_about_contract_conflict() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
@@ -2262,15 +2212,9 @@ mod tests {
         });
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_HIGH + 1.0;
 
-        tick_standing_orders(&mut state, &mut events);
+        tick_standing_orders(&mut state);
 
-        assert!(state.policies[0].quarantine);
-        let event = events.iter().find(|e| matches!(e, GameEvent::PolicyAutoActivated { .. }));
-        assert!(event.is_some(), "PolicyAutoActivated event should have fired");
-        if let GameEvent::PolicyAutoActivated { policy_name, .. } = event.unwrap() {
-            assert!(policy_name.contains("Hospitality Protection Fund"),
-                "auto-activation event should mention conflicting contract: {policy_name}");
-        }
+        assert!(state.policies[0].quarantine, "Standing order should have enabled quarantine despite contract conflict");
     }
 
     #[test]
@@ -2512,7 +2456,6 @@ mod tests {
 
     #[test]
     fn auto_rebuild_fires_when_infra_below_threshold() {
-        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::TICKS_PER_DAY;
         let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
@@ -2521,7 +2464,7 @@ mod tests {
 
         // Set tick to a day boundary so auto-rebuild fires
         state.tick = TICKS_PER_DAY as u64;
-        tick_auto_rebuild(&mut state, &mut events);
+        tick_auto_rebuild(&mut state);
 
         assert!(state.regions[0].healthcare_capacity > 0.85,
             "HC should have been repaired: {}", state.regions[0].healthcare_capacity);
@@ -2541,7 +2484,7 @@ mod tests {
         let funding_before = state.resources.funding;
 
         state.tick = TICKS_PER_DAY as u64;
-        tick_auto_rebuild(&mut state, &mut events);
+        tick_auto_rebuild(&mut state);
 
         assert!((state.resources.funding - funding_before).abs() < 0.01,
             "should not spend funds when all infra above threshold");
@@ -2549,7 +2492,6 @@ mod tests {
 
     #[test]
     fn auto_negotiate_fires_when_cooperation_below_threshold() {
-        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::{TICKS_PER_DAY, AUTO_NEGOTIATE_THRESHOLD, NEGOTIATE_COST};
         let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
@@ -2559,14 +2501,12 @@ mod tests {
         state.tick = TICKS_PER_DAY as u64;
         let coop_before = state.regions[0].governor.cooperation;
         let funding_before = state.resources.funding;
-        tick_auto_negotiate(&mut state, &mut events);
+        tick_auto_negotiate(&mut state);
 
         assert!(state.regions[0].governor.cooperation > coop_before,
             "cooperation should increase: was {coop_before}, now {}", state.regions[0].governor.cooperation);
         assert!((state.resources.funding - (funding_before - NEGOTIATE_COST)).abs() < 0.01,
             "should spend negotiate cost");
-        assert!(events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
-            "should emit PolicyAutoActivated event");
     }
 
     #[test]
@@ -2580,7 +2520,7 @@ mod tests {
         let funding_before = state.resources.funding;
 
         state.tick = TICKS_PER_DAY as u64;
-        tick_auto_negotiate(&mut state, &mut events);
+        tick_auto_negotiate(&mut state);
 
         assert!((state.resources.funding - funding_before).abs() < 0.01,
             "should not spend funds when cooperation above threshold");
@@ -2598,7 +2538,7 @@ mod tests {
         let funding_before = state.resources.funding;
 
         state.tick = TICKS_PER_DAY as u64;
-        tick_auto_negotiate(&mut state, &mut events);
+        tick_auto_negotiate(&mut state);
 
         assert!((state.resources.funding - funding_before).abs() < 0.01,
             "should not spend funds for dead governor");

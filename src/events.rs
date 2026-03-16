@@ -40,8 +40,8 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
     // Each event produces a (priority, log_msg, notification_msg, log_it) tuple.
     // notification_msg may include contextual action hints not shown in the log.
     // lower priority number = more important (shown in status bar over higher numbers).
-    // log_it = false means the event updates the notification bar but does NOT
-    // appear in the persistent event log (noise reduction for non-actionable events).
+    // log_it = false means the event is non-actionable noise and is suppressed
+    // from BOTH the persistent event log AND the notification bar.
     let day = ticks_to_days(state.tick as f64);
     let mut log_entries: Vec<String> = Vec::new();
     // Tracks the highest-priority notification for the top-right status area.
@@ -78,13 +78,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 };
                 (0u8, msg, notification, true)
             }
-            GameEvent::CollapseSecondaryDeaths { region_idx, deaths } => {
-                let region_name = state.regions.get(*region_idx)
-                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
-                let deaths_str = format_number(*deaths);
-                let msg = format!("{}: ~{}/day dying from secondary causes", region_name, deaths_str);
-                (3, msg.clone(), msg, false)
-            }
             GameEvent::DiseaseDetected { disease_idx, silent_days } => {
                 let affected: Vec<&str> = state.regions.iter()
                     .filter(|r| r.disease_state(*disease_idx).is_some_and(|inf| inf.infected > 0.0))
@@ -101,12 +94,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 };
                 let notification = format!("{}! Use [R] Research to identify it.", msg.trim_end_matches('.'));
                 (1, msg, notification, true)
-            }
-            GameEvent::IntelBriefing { message } => {
-                (3, message.clone(), message.clone(), false)
-            }
-            GameEvent::IntelAnalysis { message, .. } => {
-                (2, message.clone(), message.clone(), true)
             }
             GameEvent::ThreatEscalation { disease_idx, deaths, has_medicine } => {
                 let name = state.diseases.get(*disease_idx)
@@ -189,20 +176,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let msg = format!("NEW VARIANT: {} emerged from {}", name, parent_name);
                 (2, msg.clone(), msg, true)
             }
-            GameEvent::CrisisAutoResolved { message } => {
-                let msg = format!("Auto-resolved: {}", message);
-                (5, msg.clone(), msg, false)
-            }
-            GameEvent::ResistanceTransferred { from_disease_idx, to_disease_idx } => {
-                let from_name = state.diseases.get(*from_disease_idx)
-                    .map(|d| d.display_name(*from_disease_idx))
-                    .unwrap_or_else(|| "?".to_string());
-                let to_name = state.diseases.get(*to_disease_idx)
-                    .map(|d| d.display_name(*to_disease_idx))
-                    .unwrap_or_else(|| "?".to_string());
-                let msg = format!("Gene transfer: {} → {}", from_name, to_name);
-                (9, msg.clone(), msg, false)
-            }
             GameEvent::DiseaseSpreadToRegion { region_idx, .. } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -241,22 +214,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let msg = format!("☢ {} annihilated. {:.1}M dead. Disease eradicated.",
                     region_name, killed / 1_000_000.0);
                 (0, msg.clone(), msg, true)
-            }
-            GameEvent::MedicineShipped { medicine_idx, region_idx, doses } => {
-                let med_name = state.medicines.get(*medicine_idx)
-                    .map(|m| m.name.as_str()).unwrap_or("?");
-                let region_name = state.regions.get(*region_idx)
-                    .map(|r| r.name.as_str()).unwrap_or("?");
-                let dose_str = format_number(*doses);
-                let pop = state.regions.get(*region_idx)
-                    .map(|r| r.population as f64).unwrap_or(1.0);
-                let coverage = *doses / pop * 100.0;
-                let msg = if coverage >= 50.0 {
-                    format!("{dose_str} doses of {med_name} dispatched to {region_name} ({coverage:.0}% population coverage)")
-                } else {
-                    format!("{dose_str} doses of {med_name} en route to {region_name}")
-                };
-                (9, msg.clone(), msg, false)
             }
             GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse, efficiency, doses_wasted, people_treated } => {
                 let med_name = state.medicines.get(*medicine_idx)
@@ -305,10 +262,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let msg = format!("⚠ {region_name}: {} {severity}", system.label());
                 (2, msg.clone(), msg, true)
             }
-            GameEvent::PolicyAutoActivated { policy_name, .. } => {
-                let msg = format!("Standing order: {policy_name} auto-activated");
-                (8, msg.clone(), msg, false)
-            }
             GameEvent::ResearchHandoff { message } => {
                 (2, message.clone(), message.clone(), true)
             }
@@ -324,10 +277,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let msg = format!("FUNDING CUT: {}: {}", name, reason);
                 (2, msg.clone(), msg, true)
             }
-            GameEvent::PatronBonus { member_name, description } => {
-                let msg = format!("BONUS: {} — {}", member_name, description);
-                (3, msg.clone(), msg, false)
-            }
             GameEvent::CorporationBankrupt { corp_idx, region_idx } => {
                 let corp_name = state.corporations.get(*corp_idx)
                     .map(|c| c.name.as_str()).unwrap_or("Unknown");
@@ -335,10 +284,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let msg = format!("BANKRUPT: {} ({}) has failed", corp_name, region_name);
                 (1, msg.clone(), msg, true)
-            }
-            GameEvent::CrisisTeamReturned { label, personnel } => {
-                let msg = format!("{} returned ({} personnel freed)", label, personnel);
-                (3, msg.clone(), msg, false)
             }
             GameEvent::EmergencySampleDelivered { medicine_idx, region_idx, cooperation_change, adverse } => {
                 let med_name = state.medicines.get(*medicine_idx)
@@ -359,20 +304,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let msg = format!("Board authorized policy: {}", name);
                 let notification = format!("{}. Open [P] Policy to deploy.", msg);
                 (3, msg, notification, true)
-            }
-            GameEvent::ReactorBatchComplete { medicine_idx } => {
-                let med_name = state.medicines.get(*medicine_idx)
-                    .map(|m| m.name.as_str()).unwrap_or("Unknown");
-                let msg = format!("Reactor batch complete: {}", med_name);
-                (3, msg.clone(), msg, false)
-            }
-            GameEvent::ResearchAutoRestarted { kind } => {
-                let msg = format!("Auto-restarted: {}", kind.display_label(&state.diseases, &state.medicines));
-                (8, msg.clone(), msg, false)
-            }
-            GameEvent::QueuedResearchStarted { tech } => {
-                let msg = format!("Queued research started: {}", tech.name());
-                (3, msg.clone(), msg, false)
             }
             GameEvent::DeployBlocked { medicine_idx } => {
                 // GUARDRAIL: `DeployBlocked` is intentionally deduped here, in
@@ -408,11 +339,11 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
 
         if log_it {
             log_entries.push(msg);
-        }
 
-        // Track highest-priority notification for the status bar
-        if best_notification.as_ref().is_none_or(|(p, _)| priority < *p) {
-            best_notification = Some((priority, notification));
+            // Only actionable events (log_it=true) update the notification bar.
+            if best_notification.as_ref().is_none_or(|(p, _)| priority < *p) {
+                best_notification = Some((priority, notification));
+            }
         }
     }
 

@@ -4186,16 +4186,6 @@ pub enum GameEvent {
         #[serde(default)]
         silent_days: f64,
     },
-    /// An intelligence briefing from an Advanced Intel station.
-    IntelBriefing {
-        message: String,
-    },
-    /// Advanced Intel completed analysis on a detected disease — reveals
-    /// name and pathogen type immediately (knowledge boost to KNOWLEDGE_NAME).
-    IntelAnalysis {
-        disease_idx: usize,
-        message: String,
-    },
     /// A disease spread to a new region via cross-region transmission.
     DiseaseSpreadToRegion {
         disease_idx: usize,
@@ -4207,12 +4197,6 @@ pub enum GameEvent {
         /// Number of personnel lost due to the collapse (0 if none were available).
         personnel_lost: u32,
     },
-    /// Post-collapse secondary deaths (starvation, violence, infrastructure breakdown).
-    /// Fires once per day per collapsed region so the event log isn't spammed.
-    CollapseSecondaryDeaths {
-        region_idx: usize,
-        deaths: f64,
-    },
     /// The game just ended (defeat). UI should pause and close panels.
     /// The actual outcome is on `AppState::outcome`; this just signals the transition.
     /// A new funding contract offer is available.
@@ -4221,22 +4205,11 @@ pub enum GameEvent {
     ContractWarning { member_name: String, reason: String },
     /// A contract was revoked because condition satisfaction bottomed out.
     ContractRevoked { name: String, reason: String },
-    /// A satisfied patron granted a bonus (funding, personnel, research boost, or doses).
-    PatronBonus { member_name: String, description: String },
     /// A corporation went bankrupt (permanent).
     CorporationBankrupt { corp_idx: usize, region_idx: usize },
     GameOver,
     /// A crisis event appeared and needs player attention.
     CrisisStarted,
-    /// A crisis was auto-resolved based on player's saved preference.
-    /// Carries the resolution outcome message for the event log.
-    CrisisAutoResolved { message: String },
-    /// A reactor finished manufacturing a batch of medicine doses.
-    ReactorBatchComplete { medicine_idx: usize },
-    /// A research project was auto-restarted because auto-repeat is on.
-    ResearchAutoRestarted { kind: ResearchKind },
-    /// A queued tech auto-started because all requirements were met.
-    QueuedResearchStarted { tech: BasicTech },
     /// A research completion in one category unlocked a project in another category.
     /// Notifies the player to start the next pipeline step manually.
     ResearchHandoff { message: String },
@@ -4245,12 +4218,6 @@ pub enum GameEvent {
     /// Deployment was blocked for a medicine because its effective efficacy
     /// against all tested diseases is below the deployment threshold.
     DeployBlocked { medicine_idx: usize },
-    /// Bacterial horizontal gene transfer — broad-spectrum resistance spread
-    /// from one bacterium to another.
-    ResistanceTransferred {
-        from_disease_idx: usize,
-        to_disease_idx: usize,
-    },
     /// A disease's death toll crossed a major threshold. Fires once per
     /// threshold per disease. Auto-pauses the game.
     ThreatEscalation {
@@ -4279,12 +4246,6 @@ pub enum GameEvent {
     /// An emergency decree became available due to escalating crisis severity.
     DecreeUnlocked {
         decree: DecreeId,
-    },
-    /// A medicine shipment was dispatched and is in transit.
-    MedicineShipped {
-        medicine_idx: usize,
-        region_idx: usize,
-        doses: f64,
     },
     /// A shipment delivered and doses took effect.
     /// `efficiency` is the fraction of shipped doses that were usable (supply_lines × healthcare × collapse penalty).
@@ -4336,16 +4297,6 @@ pub enum GameEvent {
         system: InfraSystem,
         /// The breakpoint crossed: 0.50 (stressed) or 0.25 (critical) or 0.0 (failed)
         threshold: f64,
-    },
-    /// A standing order automatically activated a policy.
-    PolicyAutoActivated {
-        region_idx: usize,
-        policy_name: String,
-    },
-    /// A crisis response team returned — personnel freed.
-    CrisisTeamReturned {
-        label: String,
-        personnel: u32,
     },
     /// Chairman approval crossed a policy's threshold — that policy is now globally available.
     PolicyAuthorized {
