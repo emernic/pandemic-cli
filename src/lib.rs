@@ -124,18 +124,42 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
         Action::ClosePanel => new.ui.close_panel(),
         Action::GoHome => new.ui.go_home(),
         Action::SelectNext => {
-            let max = ui::panel_selection_max(&new.ui, &new);
-            new.ui.select_next(new.regions.len(), max);
+            if new.ui.open_panel == Panel::Research {
+                new.ui.panel_selection = ui::tech_tree::navigate(
+                    new.ui.panel_selection, ui::tech_tree::TreeDirection::Down,
+                );
+            } else {
+                let max = ui::panel_selection_max(&new.ui, &new);
+                new.ui.select_next(new.regions.len(), max);
+            }
         }
         Action::SelectPrev => {
-            let max = ui::panel_selection_max(&new.ui, &new);
-            new.ui.select_prev(new.regions.len(), max);
+            if new.ui.open_panel == Panel::Research {
+                new.ui.panel_selection = ui::tech_tree::navigate(
+                    new.ui.panel_selection, ui::tech_tree::TreeDirection::Up,
+                );
+            } else {
+                let max = ui::panel_selection_max(&new.ui, &new);
+                new.ui.select_prev(new.regions.len(), max);
+            }
         }
         Action::SelectLeft => {
-            new.ui.select_left(new.regions.len());
+            if new.ui.open_panel == Panel::Research {
+                new.ui.panel_selection = ui::tech_tree::navigate(
+                    new.ui.panel_selection, ui::tech_tree::TreeDirection::Left,
+                );
+            } else {
+                new.ui.select_left(new.regions.len());
+            }
         }
         Action::SelectRight => {
-            new.ui.select_right(new.regions.len());
+            if new.ui.open_panel == Panel::Research {
+                new.ui.panel_selection = ui::tech_tree::navigate(
+                    new.ui.panel_selection, ui::tech_tree::TreeDirection::Right,
+                );
+            } else {
+                new.ui.select_right(new.regions.len());
+            }
         }
         Action::JumpToItem { index } => {
             // Jump directly to item N in the current panel list (only when a panel is open).

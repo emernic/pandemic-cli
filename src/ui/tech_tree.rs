@@ -607,3 +607,54 @@ pub fn node_count() -> usize {
 pub fn layout_techs() -> Vec<BasicTech> {
     tree_layout().iter().map(|n| n.tech).collect()
 }
+
+/// Navigate the tech tree spatially. Returns the new selection index.
+pub fn navigate(current_idx: usize, direction: TreeDirection) -> usize {
+    let layout = tree_layout();
+    let current = match layout.get(current_idx) {
+        Some(n) => n,
+        None => return current_idx,
+    };
+
+    match direction {
+        TreeDirection::Up => {
+            // Find nearest node in a lower row, preferring same column
+            layout.iter().enumerate()
+                .filter(|(_, n)| n.row < current.row)
+                .max_by_key(|(_, n)| (n.row, -(n.col as i16 - current.col as i16).abs() as i16))
+                .map(|(i, _)| i)
+                .unwrap_or(current_idx)
+        }
+        TreeDirection::Down => {
+            // Find nearest node in a higher row, preferring same column
+            layout.iter().enumerate()
+                .filter(|(_, n)| n.row > current.row)
+                .min_by_key(|(_, n)| (n.row, (n.col as i16 - current.col as i16).abs()))
+                .map(|(i, _)| i)
+                .unwrap_or(current_idx)
+        }
+        TreeDirection::Left => {
+            // Find nearest node in same row with lower column
+            layout.iter().enumerate()
+                .filter(|(_, n)| n.row == current.row && n.col < current.col)
+                .max_by_key(|(_, n)| n.col)
+                .map(|(i, _)| i)
+                .unwrap_or(current_idx)
+        }
+        TreeDirection::Right => {
+            // Find nearest node in same row with higher column
+            layout.iter().enumerate()
+                .filter(|(_, n)| n.row == current.row && n.col > current.col)
+                .min_by_key(|(_, n)| n.col)
+                .map(|(i, _)| i)
+                .unwrap_or(current_idx)
+        }
+    }
+}
+
+pub enum TreeDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+}
