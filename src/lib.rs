@@ -283,6 +283,8 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                     if policy == PolicyId::RebuildInfra {
                         execute_command(&mut new, &GameCommand::ToggleAutoRebuild { region_idx });
                     }
+                } else if display_pos == MANAGE_NEGOTIATE_POS {
+                    execute_command(&mut new, &GameCommand::ToggleAutoNegotiate { region_idx });
                 }
             }
             // Open region filter when browsing medicines

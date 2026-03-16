@@ -158,6 +158,9 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     // Auto-rebuild infrastructure for regions with the toggle enabled.
     policy::tick_auto_rebuild(&mut new, &mut events);
 
+    // Auto-negotiate with governors when cooperation drops below threshold.
+    policy::tick_auto_negotiate(&mut new, &mut events);
+
     // Screening infrastructure — update progress ramp-up and estimated infection counts.
     // Must run after spread (so real values are current) and after policy costs
     // (so suspended screening is reflected).
@@ -925,6 +928,21 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
                     .map(|r| r.name.as_str()).unwrap_or("?");
                 CommandResult {
                     message: Some(format!("Auto-rebuild {} for {}", status, name)),
+                    success: true,
+                    events: Vec::new(),
+                }
+            } else {
+                CommandResult { message: None, success: false, events: Vec::new() }
+            }
+        }
+        GameCommand::ToggleAutoNegotiate { region_idx } => {
+            if let Some(p) = state.policies.get_mut(*region_idx) {
+                p.auto_negotiate = !p.auto_negotiate;
+                let status = if p.auto_negotiate { "enabled" } else { "disabled" };
+                let name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                CommandResult {
+                    message: Some(format!("Auto-negotiate {} for {}", status, name)),
                     success: true,
                     events: Vec::new(),
                 }

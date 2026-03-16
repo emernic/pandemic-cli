@@ -969,6 +969,9 @@ pub struct RegionPolicy {
     /// Auto-rebuild infrastructure: automatically repairs when any infra stat drops below 90%.
     #[serde(default)]
     pub auto_rebuild_infra: bool,
+    /// Auto-negotiate with governor: automatically negotiates when cooperation drops below 50.
+    #[serde(default)]
+    pub auto_negotiate: bool,
 }
 
 /// Total number of policy types available per region.
@@ -1110,6 +1113,7 @@ impl RegionPolicy {
         self.screening = ScreeningLevel::None;
         self.martial_law = false;
         self.auto_rebuild_infra = false;
+        self.auto_negotiate = false;
         // nuclear_state is NOT cleared — it's permanent and post-collapse
     }
 
@@ -2021,6 +2025,8 @@ pub const GOVERNOR_COOPERATION_COST_MULT: f64 = 0.8;
 pub const NEGOTIATE_COST: f64 = 200.0;
 /// Cooperation gain from negotiate action.
 pub const NEGOTIATE_COOPERATION_GAIN: f64 = 15.0;
+/// Auto-negotiate triggers when governor cooperation drops below this threshold.
+pub const AUTO_NEGOTIATE_THRESHOLD: f64 = 50.0;
 /// Ticks between autonomous governor hostile actions (~2 days).
 pub const GOVERNOR_ACTION_INTERVAL: u64 = 240;
 /// Policy effectiveness when the region is leaderless (governor dead, no successor yet).
@@ -4406,6 +4412,8 @@ pub enum GameCommand {
     ToggleDeployRegion { med_idx: usize, region_idx: usize },
     /// Toggle auto-rebuild infrastructure for a region.
     ToggleAutoRebuild { region_idx: usize },
+    /// Toggle auto-negotiate with governor for a region.
+    ToggleAutoNegotiate { region_idx: usize },
     /// Toggle auto-repeat for a specific repeatable research project.
     ToggleAutoRepeat { kind: ResearchKind },
     /// Toggle queue for a tech that can't start yet — auto-starts when ready.

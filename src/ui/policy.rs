@@ -422,6 +422,8 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
         } else {
             Style::default().fg(Color::White)
         };
+        let auto_negotiate = state.policies[region_idx].auto_negotiate;
+        let auto_tag = if auto_negotiate { "[AUTO] " } else { "" };
         if gov.is_dead() {
             lines.push(Line::from(vec![
                 Span::styled(marker.to_string(), name_style),
@@ -445,6 +447,11 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
             };
             lines.push(Line::from(vec![
                 Span::styled(marker.to_string(), name_style),
+                if auto_negotiate {
+                    Span::styled(auto_tag, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                } else {
+                    Span::raw("")
+                },
                 Span::styled(
                     format!("Negotiate: {} ", gov.name),
                     name_style,
@@ -538,6 +545,16 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
                     Span::styled(pressure_text, Style::default().fg(Color::DarkGray)),
                 ]));
             }
+            // X hotkey hint for auto-negotiate
+            let auto_hint = if auto_negotiate {
+                "[X] Auto: ON (negotiates when co-op < 50)"
+            } else {
+                "[X] Auto: OFF"
+            };
+            lines.push(Line::from(vec![
+                Span::raw("      "),
+                Span::styled(auto_hint, Style::default().fg(if auto_negotiate { Color::Green } else { Color::DarkGray })),
+            ]));
         }
         lines.push(Line::from(""));
 
