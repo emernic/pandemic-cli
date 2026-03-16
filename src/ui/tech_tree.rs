@@ -369,7 +369,27 @@ fn render_tree(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize,
         let name_style = Style::default().fg(name_color).add_modifier(
             if is_selected { Modifier::BOLD } else { Modifier::empty() }
         );
-        buf_write(f, x + 1, y + 1, name, name_style, max_inner as u16);
+
+        // Show progress percentage inline for actively researching techs
+        let research = if is_researching {
+            state.active_research.iter().find(|r| {
+                matches!(r.kind, ResearchKind::BasicResearch { tech } if tech == node.tech)
+            })
+        } else {
+            None
+        };
+
+        if let Some(r) = research {
+            let pct = (r.progress / r.required_ticks * 100.0).min(100.0) as u8;
+            let pct_str = format!(" {}%", pct);
+            let name_budget = max_inner.saturating_sub(pct_str.len());
+            let truncated: String = name.chars().take(name_budget).collect();
+            buf_write(f, x + 1, y + 1, &truncated, name_style, name_budget as u16);
+            let pct_x = x + 1 + truncated.len() as u16;
+            buf_write(f, pct_x, y + 1, &pct_str, Style::default().fg(Color::Yellow), max_inner as u16);
+        } else {
+            buf_write(f, x + 1, y + 1, name, name_style, max_inner as u16);
+        }
     }
 
     // --- Bottom detail strip (only when no side detail panel) ---
