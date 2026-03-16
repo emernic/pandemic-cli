@@ -240,6 +240,13 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                             if sel < new.reactors.len() && new.reactors[sel].medicine_idx.is_some() {
                                 execute_command(&mut new, &GameCommand::ToggleReactorRepeat { reactor_idx: sel });
                             }
+                        } else if lab_ui.tab() == LabTab::Infra {
+                            // Infra tab: X toggles auto-repeat for TrainPersonnel
+                            let items = new.infra_tab_items();
+                            if let Some(InfraItem::TrainPersonnel) = items.get(new.ui.panel_selection) {
+                                let kind = ResearchKind::TrainPersonnel;
+                                execute_command(&mut new, &GameCommand::ToggleAutoRepeat { kind });
+                            }
                         } else {
                             // Toggle auto-repeat for the selected repeatable project
                             let items = new.lab_tab_items(lab_ui.tab());
@@ -487,16 +494,9 @@ pub fn tick_and_process(state: &AppState) -> AppState {
             let tab = new.ui.lab_ui.as_ref().unwrap().tab();
             let new_items = new.lab_tab_items(tab);
             let old_kind = old_item.to_kind(state);
-            let found = match old_item {
-                ResearchFlatItem::UpgradeLab => {
-                    new_items.iter().position(|item| matches!(item, ResearchFlatItem::UpgradeLab))
-                }
-                _ => {
-                    old_kind.as_ref().and_then(|kind| {
-                        new_items.iter().position(|item| item.to_kind(&new).as_ref() == Some(kind))
-                    })
-                }
-            };
+            let found = old_kind.as_ref().and_then(|kind| {
+                new_items.iter().position(|item| item.to_kind(&new).as_ref() == Some(kind))
+            });
             if let Some(pos) = found {
                 new.ui.panel_selection = pos;
             } else {
@@ -656,11 +656,6 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                 return None;
             };
             match item {
-                ResearchFlatItem::UpgradeLab => {
-                    ui.lab_ui = Some(LabUiState::ConfirmLabUpgrade { tab });
-                    ui.panel_selection = 0;
-                    return None;
-                }
                 // Active projects: Enter is a no-op (info already visible)
                 ResearchFlatItem::Active(_) => {}
                 // Available projects: go to confirm screen

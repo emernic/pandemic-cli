@@ -242,37 +242,7 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
                 )));
                 lines.push(Line::from(""));
             }
-            crate::state::ResearchFlatItem::UpgradeLab => {
-                lines.push(Line::from(""));
-                if selected { selected_line = Some(lines.len()); }
-                let marker = if selected { "▶ " } else { "  " };
-                let upgrade_style = if selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::Magenta)
-                };
-                lines.push(Line::from(Span::styled(
-                    format!("{}[PURCHASE] Upgrade Lab", marker),
-                    upgrade_style,
-                )));
-                let (cost, next_name, pct) = if state.lab_level == 0 {
-                    (LAB_LEVEL_1_COST, "Enhanced Sequencing", 30)
-                } else {
-                    (LAB_LEVEL_2_COST, "Advanced Genomics Center", 60)
-                };
-                let can_afford = state.resources.funding >= cost;
-                let cost_style = if can_afford { Color::Cyan } else { Color::Red };
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("    {} → {} (+{}% speed)", state.lab_level_name(), next_name, pct),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                    Span::styled(
-                        format!(" [¥{:.0}]", cost),
-                        Style::default().fg(cost_style),
-                    ),
-                ]));
-            }
+            // UpgradeLab moved to Infra tab
         }
     }
 
@@ -1198,7 +1168,7 @@ fn render_infra_tab(f: &mut Frame, area: Rect, state: &AppState) {
     }
 
     lines.push(Line::from(Span::styled(
-        "  [↑/↓] Select  [Enter] Confirm  [←/→] Tab  [Esc] Close",
+        "  [↑/↓] Select  [Enter] Confirm  [X] Auto  [←/→] Tab  [Esc] Close",
         Style::default().fg(Color::DarkGray),
     )));
 

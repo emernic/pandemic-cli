@@ -4842,8 +4842,6 @@ pub enum ResearchFlatItem {
     Available(usize),
     /// Manufacturing with a full stockpile — visible for auto-toggle but not startable.
     FullStockpile(ResearchKind),
-    /// The lab upgrade button.
-    UpgradeLab,
 }
 
 /// Items shown on the Infra tab — infrastructure investments and personnel management.
@@ -4877,8 +4875,7 @@ impl ResearchFlatItem {
             Self::Active(idx) => state.active_research.get(*idx).map(|p| p.kind.clone()),
             Self::Available(idx) => state.all_available_projects().get(*idx).cloned(),
             Self::FullStockpile(kind) => Some(kind.clone()),
-            Self::UpgradeLab
-            | Self::ActiveScreening(_)
+            Self::ActiveScreening(_)
             | Self::StartNewScreening
             | Self::StartNewTrial => None,
         }
@@ -6749,7 +6746,6 @@ impl WorldState {
                     }
                 }
                 ResearchFlatItem::FullStockpile(kind) => kind.lab_tab() == Some(tab),
-                ResearchFlatItem::UpgradeLab => false, // Moved to Infra tab
                 ResearchFlatItem::ActiveScreening(_)
                 | ResearchFlatItem::StartNewScreening
                 | ResearchFlatItem::StartNewTrial => false,
