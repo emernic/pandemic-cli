@@ -1111,8 +1111,9 @@ fn render_infra_tab(f: &mut Frame, area: Rect, state: &AppState) {
                 let can_afford = state.resources.funding >= cost
                     && state.personnel_available() >= base_personnel;
                 let added_upkeep = TRAIN_PERSONNEL_BATCH as f64 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY;
+                let auto_tag = if state.auto_repeat_research.contains(&ResearchKind::TrainPersonnel) { " AUTO" } else { "" };
                 lines.push(Line::from(Span::styled(
-                    format!("{}[HIRE] Train Personnel (+{})", marker, TRAIN_PERSONNEL_BATCH),
+                    format!("{}[HIRE]{} Train Personnel (+{})", marker, auto_tag, TRAIN_PERSONNEL_BATCH),
                     sel_style(Color::Green),
                 )));
                 lines.push(Line::from(vec![
