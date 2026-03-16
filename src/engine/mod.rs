@@ -1565,14 +1565,6 @@ mod tests {
         assert_eq!(state.ui.panel_selection, 0);
     }
 
-    /// Helper: unlock medicines but leave them untested.
-    fn unlock_untested(state: &mut WorldState) {
-        for med in &mut state.medicines {
-            med.unlocked = true;
-            med.doses = med.max_doses;
-        }
-    }
-
     #[test]
     fn toggle_deploy_enables_and_disables() {
         let mut state = AppState::new_default(42);
