@@ -886,9 +886,7 @@ fn render_trial_wizard(f: &mut Frame, area: Rect, state: &AppState, lab_ui: &Lab
                 Style::default().fg(Color::DarkGray),
             )));
         }
-        LabUiState::TrialSelectRigor { hit_index } => {
-            let hit = state.screening_hits.get(*hit_index);
-            let compound_id = hit.map(|h| h.compound_id.as_str()).unwrap_or("?");
+        LabUiState::TrialSelectRigor { compound_id } => {
 
             lines.push(Line::from(Span::styled(
                 format!("  Clinical Trial > {} > Select Rigor", compound_id),
