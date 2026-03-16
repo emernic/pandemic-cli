@@ -120,26 +120,15 @@ def has_unpushed_edits(entries):
 UI_PATHS = ("src/ui/", "src/engine/")
 
 
-def has_ui_changes_without_playtest(entries):
-    """Check if UI/engine files were edited but snapshot mode was never run after.
-
-    Walks backward through entries. If we hit a snapshot run, we're fine — the
-    agent looked at the game after their changes. If we hit UI file edits
-    without having seen a snapshot run first, they never checked their work.
-    """
-    found_ui_edit = False
-    for entry in reversed(entries):
+def has_ui_changes(entries):
+    """Check if any UI/engine files were edited during this session."""
+    for entry in entries:
         for tool in get_tool_uses(entry):
-            if tool["name"] == "Bash":
-                cmd = tool["input"].get("command", "")
-                if "cargo run" in cmd and "--snapshot" in cmd:
-                    # They ran the game — everything before this is fine
-                    return False
-            elif tool["name"] in ("Write", "Edit"):
+            if tool["name"] in ("Write", "Edit"):
                 path = tool["input"].get("file_path", "")
                 if any(p in path for p in UI_PATHS):
-                    found_ui_edit = True
-    return found_ui_edit
+                    return True
+    return False
 
 
 def main():
@@ -163,8 +152,8 @@ def main():
         print(json.dumps({"decision": "block", "reason": SLOP_CHECK_PROMPT}))
         return
 
-    # Third check: UI/engine changes without running the game?
-    if has_ui_changes_without_playtest(entries):
+    # Third check: UI/engine changes? Remind to playtest.
+    if has_ui_changes(entries):
         print(json.dumps({"decision": "block", "reason": UI_PLAYTEST_PROMPT}))
         return
 
