@@ -232,10 +232,8 @@ fn generate_reported_stats(medicine: &mut Medicine, rigor: TrialRigor, rng: &mut
 /// Generate a medicine name from mechanism of action.
 ///
 /// Builds pharmaceutical-sounding names from random syllable components plus
-/// a mechanism-based suffix (following real INN stem conventions). The prefix
-/// is fully randomized — no dependency on the disease name — so multiple
-/// medicines for the same disease get distinct names.
-fn generate_medicine_name(_disease_name: &str, mechanism: Option<MechanismOfAction>, rng: &mut impl rand::Rng) -> String {
+/// a mechanism-based suffix (following real INN stem conventions).
+fn generate_medicine_name(mechanism: Option<MechanismOfAction>, rng: &mut impl rand::Rng) -> String {
     // INN-style suffixes by mechanism (these are real pharmaceutical stems)
     let suffixes: &[&str] = match mechanism {
         Some(MechanismOfAction::CellWallInhibitor) => &["cillin", "penem", "cef"],
@@ -368,7 +366,7 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
                     let disease_name = state.diseases.get(d_idx)
                         .map(|d| d.display_name(d_idx))
                         .unwrap_or_else(|| format!("P{}", d_idx + 1));
-                    medicine.name = generate_medicine_name(&disease_name, medicine.mechanism, rng);
+                    medicine.name = generate_medicine_name(medicine.mechanism, rng);
                 }
                 events.push(GameEvent::TrialCompleted {
                     medicine_idx: m_idx,
@@ -1312,7 +1310,7 @@ mod tests {
         // Generate 30 names (5 per mechanism) — all should be unique
         for mech in &mechanisms {
             for _ in 0..5 {
-                let name = super::generate_medicine_name("TestDisease", *mech, &mut rng);
+                let name = super::generate_medicine_name(*mech, &mut rng);
                 assert!(!name.is_empty());
                 // First letter should be uppercase
                 assert!(name.chars().next().unwrap().is_uppercase(),
@@ -1326,10 +1324,10 @@ mod tests {
             "Expected at least 25 unique names from 30 generated, got {}: {:?}",
             names.len(), names);
 
-        // Same disease name should NOT produce identical names
+        // Consecutive calls with the same mechanism should produce different names
         let mut rng2 = ChaCha8Rng::seed_from_u64(99);
-        let a = super::generate_medicine_name("Machupo-Sigma", Some(MechanismOfAction::PolymeraseInhibitor), &mut rng2);
-        let b = super::generate_medicine_name("Machupo-Sigma", Some(MechanismOfAction::PolymeraseInhibitor), &mut rng2);
-        assert_ne!(a, b, "Two medicines for the same disease should get different names");
+        let a = super::generate_medicine_name(Some(MechanismOfAction::PolymeraseInhibitor), &mut rng2);
+        let b = super::generate_medicine_name(Some(MechanismOfAction::PolymeraseInhibitor), &mut rng2);
+        assert_ne!(a, b, "Consecutive calls should produce different names");
     }
 }
