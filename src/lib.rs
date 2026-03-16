@@ -186,6 +186,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 let max = ui::panel_selection_max(&new.ui, &new);
                 new.ui.panel_selection = (*index).min(max);
             }
+            sync_screening_form_selection(&mut new);
         }
         Action::ToggleExtra => {
             // Ledger: switch between Buy and Sell confirmation
