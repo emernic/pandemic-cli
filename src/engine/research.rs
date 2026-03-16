@@ -321,17 +321,12 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
 
     let mut board_notify_count: u32 = 0;
 
-    let lab_mult = state.lab_speed_multiplier();
-    // Biotech sector bonus: best regional bonus boosts research speed
-    let biotech_bonus = (0..state.regions.len())
-        .map(|r| state.sector_bonus(r, crate::state::CorporationSector::Biotech))
-        .fold(0.0_f64, f64::max);
-    let biotech_mult = 1.0 + crate::state::CorporationSector::Biotech.max_bonus_pct() / 100.0 * biotech_bonus;
+    let infra_mult = state.research_infra_multiplier();
 
     // Advance all research projects
     for project in &mut state.active_research {
         let speed = project.speed(&state.medicines);
-        project.progress += speed * lab_mult * biotech_mult;
+        project.progress += speed * infra_mult;
     }
 
     // Collect completed projects (drain_filter pattern via retain)
