@@ -230,22 +230,40 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                     *double_personnel = !*double_personnel;
                 } else if let Some(lab_ui) = &new.ui.lab_ui {
                     if lab_ui.is_browsing() {
-                        // Toggle auto-repeat for the selected repeatable project
-                        let items = new.lab_tab_items(lab_ui.tab());
-                        if let Some(item) = items.get(new.ui.panel_selection) {
-                            let kind = match item {
-                                ResearchFlatItem::Available(idx) => {
-                                    new.all_available_projects().get(*idx).cloned()
+                        if lab_ui.tab() == LabTab::Reactors {
+                            // Reactors tab: X cycles auto options for selected reactor
+                            // nothing → auto-deploy → auto-deploy+repeat → nothing
+                            let sel = new.ui.panel_selection;
+                            if sel < new.reactors.len() && new.reactors[sel].medicine_idx.is_some() {
+                                let r = &new.reactors[sel];
+                                if !r.auto_deploy && !r.repeat {
+                                    execute_command(&mut new, &GameCommand::ToggleReactorAutoDeploy { reactor_idx: sel });
+                                } else if r.auto_deploy && !r.repeat {
+                                    execute_command(&mut new, &GameCommand::ToggleReactorRepeat { reactor_idx: sel });
+                                } else {
+                                    // Both on → turn both off
+                                    execute_command(&mut new, &GameCommand::ToggleReactorAutoDeploy { reactor_idx: sel });
+                                    execute_command(&mut new, &GameCommand::ToggleReactorRepeat { reactor_idx: sel });
                                 }
-                                ResearchFlatItem::Active(idx) => {
-                                    new.active_research.get(*idx).map(|p| p.kind.clone())
-                                }
-                                ResearchFlatItem::FullStockpile(k) => Some(k.clone()),
-                                _ => None,
-                            };
-                            if let Some(kind) = kind {
-                                if kind.is_repeatable() {
-                                    execute_command(&mut new, &GameCommand::ToggleAutoRepeat { kind });
+                            }
+                        } else {
+                            // Toggle auto-repeat for the selected repeatable project
+                            let items = new.lab_tab_items(lab_ui.tab());
+                            if let Some(item) = items.get(new.ui.panel_selection) {
+                                let kind = match item {
+                                    ResearchFlatItem::Available(idx) => {
+                                        new.all_available_projects().get(*idx).cloned()
+                                    }
+                                    ResearchFlatItem::Active(idx) => {
+                                        new.active_research.get(*idx).map(|p| p.kind.clone())
+                                    }
+                                    ResearchFlatItem::FullStockpile(k) => Some(k.clone()),
+                                    _ => None,
+                                };
+                                if let Some(kind) = kind {
+                                    if kind.is_repeatable() {
+                                        execute_command(&mut new, &GameCommand::ToggleAutoRepeat { kind });
+                                    }
                                 }
                             }
                         }
@@ -556,6 +574,10 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
 fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.lab_ui.clone() {
         Some(LabUiState::Browse { tab }) => {
+            // Reactors tab: handled separately since it doesn't use ResearchFlatItem
+            if tab == LabTab::Reactors {
+                return handle_reactor_confirm(ui, state);
+            }
             let items = state.lab_tab_items(tab);
             let Some(item) = items.get(ui.panel_selection) else {
                 return None;
@@ -637,8 +659,63 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
             }
             None
         }
+        // Reactor medicine selection: assign the selected medicine
+        Some(LabUiState::ReactorSelectMedicine { reactor_idx }) => {
+            let eligible = state.reactor_eligible_medicines();
+            if let Some(&med_idx) = eligible.get(ui.panel_selection) {
+                ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Reactors });
+                ui.panel_selection = reactor_idx;
+                return Some(GameCommand::ConfigureReactor {
+                    reactor_idx,
+                    medicine_idx: Some(med_idx),
+                });
+            }
+            None
+        }
         None => None,
     }
+}
+
+/// Handle Enter key in the Reactors tab.
+fn handle_reactor_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
+    let sel = ui.panel_selection;
+    let reactor_count = state.reactors.len();
+
+    // Buy reactor button
+    if sel == reactor_count {
+        return Some(GameCommand::BuyReactor);
+    }
+
+    let reactor = match state.reactors.get(sel) {
+        Some(r) => r,
+        None => return None,
+    };
+
+    if reactor.active {
+        // Reactor is running — Enter is a no-op
+        return None;
+    }
+
+    if reactor.medicine_idx.is_none() {
+        // Empty reactor — open medicine selection wizard
+        ui.lab_ui = Some(LabUiState::ReactorSelectMedicine { reactor_idx: sel });
+        ui.panel_selection = 0;
+        return None;
+    }
+
+    // Configured idle reactor — check if stockpile is full
+    if let Some(med) = state.medicines.get(reactor.medicine_idx.unwrap()) {
+        let target = med.max_doses * state.manufacturing_yield_bonus();
+        if med.doses >= target {
+            // Full stockpile — allow reassignment instead
+            ui.lab_ui = Some(LabUiState::ReactorSelectMedicine { reactor_idx: sel });
+            ui.panel_selection = 0;
+            return None;
+        }
+    }
+
+    // Start a batch
+    Some(GameCommand::StartReactorBatch { reactor_idx: sel })
 }
 
 fn handle_policy_confirm(ui: &mut UiState, _state: &AppState) -> Option<GameCommand> {

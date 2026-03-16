@@ -228,6 +228,11 @@ pub struct WorldState {
     /// Completed screening hits awaiting clinical trials.
     #[serde(default)]
     pub screening_hits: Vec<ScreeningHit>,
+    /// Production reactors for manufacturing medicine doses.
+    /// Players start with 1 and can buy more. Each reactor can run one
+    /// ManufactureDoses batch at a time.
+    #[serde(default)]
+    pub reactors: Vec<Reactor>,
 }
 
 /// Runtime state combining world, UI, and session data.
@@ -3390,6 +3395,40 @@ pub struct Medicine {
     pub manufacturer_corp_idx: Option<usize>,
 }
 
+/// A production reactor for manufacturing medicine doses.
+/// Reactors are physical equipment in the lab. Each can run one batch at a time.
+/// Players start with 1 and can purchase additional reactor slots.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Reactor {
+    /// Which medicine this reactor is configured to produce, if any.
+    #[serde(default)]
+    pub medicine_idx: Option<usize>,
+    /// When enabled, finished batches auto-deploy to worst-affected regions.
+    #[serde(default)]
+    pub auto_deploy: bool,
+    /// When enabled, reactor automatically starts the next batch when current finishes.
+    #[serde(default)]
+    pub repeat: bool,
+    /// Current batch progress (ticks elapsed). 0.0 when idle.
+    #[serde(default)]
+    pub batch_progress: f64,
+    /// Required ticks to complete the current batch.
+    #[serde(default)]
+    pub batch_required: f64,
+    /// Personnel assigned to the current batch.
+    #[serde(default)]
+    pub personnel_assigned: u32,
+    /// Whether a batch is currently running.
+    #[serde(default)]
+    pub active: bool,
+}
+
+/// Cost to buy the Nth reactor (0-indexed). First reactor is free (given at start).
+/// Subsequent reactors cost ¥500 each.
+pub const REACTOR_COST: f64 = 500.0;
+/// Maximum number of reactors a player can own.
+pub const MAX_REACTORS: usize = 6;
+
 //// A medicine deployment in transit to a region. Created when the player
 /// dispatches doses; takes effect when `arrive_tick` is reached.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -4253,6 +4292,8 @@ pub enum GameEvent {
     /// A crisis was auto-resolved based on player's saved preference.
     /// Carries the resolution outcome message for the event log.
     CrisisAutoResolved { message: String },
+    /// A reactor finished manufacturing a batch of medicine doses.
+    ReactorBatchComplete { medicine_idx: usize },
     /// A research project was auto-restarted because auto-repeat is on.
     ResearchAutoRestarted { kind: ResearchKind },
     /// A cued tech auto-started because all requirements were met.
@@ -4471,6 +4512,16 @@ pub enum GameCommand {
     BailoutCorporation { corp_idx: usize },
     /// Fire unassigned personnel to reduce upkeep costs.
     FirePersonnel { count: u32 },
+    /// Purchase an additional production reactor.
+    BuyReactor,
+    /// Assign a medicine to a reactor for production, or clear it.
+    ConfigureReactor { reactor_idx: usize, medicine_idx: Option<usize> },
+    /// Toggle auto-deploy for a reactor.
+    ToggleReactorAutoDeploy { reactor_idx: usize },
+    /// Toggle repeat for a reactor.
+    ToggleReactorRepeat { reactor_idx: usize },
+    /// Start a manufacturing batch in a specific reactor.
+    StartReactorBatch { reactor_idx: usize },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -4804,6 +4855,8 @@ pub enum LabUiState {
     ScreeningSelectModality { disease_idx: usize },
     /// Screening wizard: step 3 — select run size and confirm.
     ScreeningSelectSize { disease_idx: usize, modality: ScreeningModality },
+    /// Reactor configuration: select which medicine to assign to a reactor.
+    ReactorSelectMedicine { reactor_idx: usize },
 }
 
 impl LabUiState {
@@ -4816,6 +4869,7 @@ impl LabUiState {
             LabUiState::ScreeningSelectDisease
             | LabUiState::ScreeningSelectModality { .. }
             | LabUiState::ScreeningSelectSize { .. } => LabTab::Screening,
+            LabUiState::ReactorSelectMedicine { .. } => LabTab::Reactors,
         }
     }
 
@@ -5154,6 +5208,10 @@ impl UiState {
                         self.lab_ui = Some(LabUiState::ScreeningSelectModality {
                             disease_idx: *disease_idx,
                         });
+                        self.panel_selection = 0;
+                    }
+                    Some(LabUiState::ReactorSelectMedicine { .. }) => {
+                        self.lab_ui = Some(LabUiState::Browse { tab: LabTab::Reactors });
                         self.panel_selection = 0;
                     }
                     Some(LabUiState::Browse { .. }) | None => {
@@ -5834,6 +5892,10 @@ impl WorldState {
             embezzlement_warned: false,
             screening_runs: Vec::new(),
             screening_hits: Vec::new(),
+            reactors: vec![Reactor {
+                medicine_idx: None, auto_deploy: false, repeat: false,
+                batch_progress: 0.0, batch_required: 0.0, personnel_assigned: 0, active: false,
+            }],
         }
     }
 
@@ -6026,7 +6088,8 @@ impl WorldState {
         }).sum();
         let crisis_ops: u32 = self.crisis_operations.iter().map(|op| op.personnel).sum();
         let screening: u32 = self.screening_runs.iter().map(|r| r.personnel_assigned).sum();
-        research + policy + hospitals + intel + crisis_ops + screening
+        let reactors: u32 = self.reactor_personnel();
+        research + policy + hospitals + intel + crisis_ops + screening + reactors
     }
 
     pub fn personnel_available(&self) -> u32 {
@@ -6537,6 +6600,36 @@ impl WorldState {
                 }
             }
         }
+        // Clean ManufactureDoses from auto_repeat_research — reactors handle repeat now.
+        self.auto_repeat_research.retain(|k| !matches!(k, ResearchKind::ManufactureDoses { .. }));
+
+        // Backfill reactors for saves before reactor system.
+        if self.reactors.is_empty() {
+            self.reactors.push(Reactor {
+                medicine_idx: None, auto_deploy: false, repeat: false,
+                batch_progress: 0.0, batch_required: 0.0, personnel_assigned: 0, active: false,
+            });
+            // Migrate active ManufactureDoses research into reactors.
+            let mut mfg_indices = Vec::new();
+            for (i, project) in self.active_research.iter().enumerate() {
+                if let ResearchKind::ManufactureDoses { medicine_idx } = &project.kind {
+                    if let Some(reactor) = self.reactors.first_mut() {
+                        if !reactor.active {
+                            reactor.medicine_idx = Some(*medicine_idx);
+                            reactor.active = true;
+                            reactor.batch_progress = project.progress;
+                            reactor.batch_required = project.required_ticks;
+                            reactor.personnel_assigned = project.personnel_assigned;
+                            mfg_indices.push(i);
+                        }
+                    }
+                }
+            }
+            // Remove migrated ManufactureDoses from active_research
+            for i in mfg_indices.into_iter().rev() {
+                self.active_research.remove(i);
+            }
+        }
     }
 
     /// Available field research projects (excludes currently active).
@@ -6662,16 +6755,8 @@ impl WorldState {
             }
         }
 
-        // Full-stockpile manufacturing: visible for auto-toggle but not startable
-        let active_kinds: Vec<&ResearchKind> = self.active_research.iter().map(|p| &p.kind).collect();
-        for (i, med) in self.medicines.iter().enumerate() {
-            if med.unlocked && med.doses >= med.max_doses {
-                let kind = ResearchKind::ManufactureDoses { medicine_idx: i };
-                if !active_kinds.contains(&&kind) {
-                    items.push(ResearchFlatItem::FullStockpile(kind));
-                }
-            }
-        }
+        // Manufacturing is now handled by reactors, not the research pipeline.
+        // FullStockpile entries are no longer generated here.
 
         if self.lab_level < 2 {
             items.push(ResearchFlatItem::UpgradeLab);
@@ -6685,6 +6770,10 @@ impl WorldState {
     pub fn lab_tab_items(&self, tab: LabTab) -> Vec<ResearchFlatItem> {
         if tab == LabTab::Screening {
             return self.screening_tab_items();
+        }
+        // Reactors tab renders directly from state.reactors, not through ResearchFlatItem.
+        if tab == LabTab::Reactors {
+            return Vec::new();
         }
 
         let all = self.research_flat_items();
@@ -6902,6 +6991,26 @@ impl WorldState {
         }
     }
 
+    /// Medicines eligible for reactor assignment (unlocked medicines).
+    pub fn reactor_eligible_medicines(&self) -> Vec<usize> {
+        self.medicines.iter().enumerate()
+            .filter(|(_, m)| m.unlocked)
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// Personnel currently assigned to reactor batches.
+    pub fn reactor_personnel(&self) -> u32 {
+        self.reactors.iter().filter(|r| r.active).map(|r| r.personnel_assigned).sum()
+    }
+
+    /// Reactor manufacturing costs for a given medicine.
+    /// Returns (personnel, ticks, funding) — same as ManufactureDoses effective_costs
+    /// but computed for reactor context.
+    pub fn reactor_batch_costs(&self, medicine_idx: usize) -> (u32, f64, f64) {
+        let kind = ResearchKind::ManufactureDoses { medicine_idx };
+        self.effective_costs(&kind)
+    }
 
     /// Approximate cross-region spread factor from `source` to `dest` (0.0–1.0).
     /// Accounts for travel bans, border controls, screening, island geography,
@@ -7023,18 +7132,12 @@ impl WorldState {
     /// Available applied research projects (excludes currently active).
     pub(crate) fn available_applied_projects(&self) -> Vec<ResearchKind> {
         let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
-            .filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel))
+            .filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::TrainPersonnel))
             .map(|p| &p.kind).collect();
         let mut projects = Vec::new();
         for (i, med) in self.medicines.iter().enumerate() {
             if med.unlocked {
-                // Unlocked medicines can be manufactured if doses are depleted
-                if med.doses < med.max_doses {
-                    let kind = ResearchKind::ManufactureDoses { medicine_idx: i };
-                    if !active_kinds.contains(&&kind) {
-                        projects.push(kind);
-                    }
-                }
+                // Manufacturing is now handled by reactors, not the research pipeline.
                 continue;
             }
             // Targeted medicines (Antiviral/Antibiotic) require full study (knowledge 1.0)
@@ -7074,14 +7177,14 @@ impl WorldState {
     /// Used to show greyed-out "pending" entries in the Applied Research panel.
     pub fn blocked_medicine_developments(&self) -> Vec<(usize, String)> {
         let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
-            .filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel))
+            .filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::TrainPersonnel))
             .map(|p| &p.kind).collect();
         let has_targeted_drug_design = self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign);
 
         // Collect disease indices already covered by an available or active targeted medicine
         // development option. (The global BroadSpectrum medicine is always unlocked from game
-        // start and therefore appears only in ManufactureDoses, never in DevelopMedicine — it
-        // cannot pollute this set. Prion diseases have no medicines at all.)
+        // start — manufacturing is handled by reactors now, not the research pipeline.
+        // Prion diseases have no medicines at all.)
         let mut covered: std::collections::HashSet<usize> = std::collections::HashSet::new();
         for kind in self.available_applied_projects() {
             if let ResearchKind::DevelopMedicine { medicine_idx } = kind {

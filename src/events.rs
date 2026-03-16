@@ -372,6 +372,12 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let notification = format!("{}. Open [P] Policy to deploy.", msg);
                 (3, msg, notification)
             }
+            GameEvent::ReactorBatchComplete { medicine_idx } => {
+                let med_name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str()).unwrap_or("Unknown");
+                let msg = format!("Reactor batch complete: {}", med_name);
+                (3, msg.clone(), msg)
+            }
             GameEvent::ResearchAutoRestarted { kind } => {
                 let msg = format!("Auto-restarted: {}", kind.display_label(&state.diseases, &state.medicines));
                 (8, msg.clone(), msg)
