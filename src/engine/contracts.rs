@@ -244,58 +244,41 @@ pub(super) fn tick_patron_bonuses(state: &mut WorldState, rng: &mut ChaCha8Rng) 
             continue;
         }
 
-        let _member_name = state.board_members.get(member_idx)
-            .map(|m| m.name.clone())
-            .unwrap_or_else(|| "Patron".to_string());
         let personality = state.board_members.get(member_idx)
             .and_then(|m| m.personality);
 
-        let _description = match personality {
+        match personality {
             Some(BoardPersonality::Profiteer) | None => {
-                // Emergency funding: lump sum scaled to board budget.
                 let bonus = state.board_budget_per_tick * TICKS_PER_DAY * PATRON_BONUS_FUNDING_DAYS;
                 state.resources.funding += bonus;
-                format!("Emergency funds: +¥{:.0}", bonus)
             }
             Some(BoardPersonality::Technocrat) => {
-                // Research boost: accelerate a random active research project.
                 if let Some(proj_idx) = pick_random_research(state, rng) {
                     let remaining = state.active_research[proj_idx].required_ticks
                         - state.active_research[proj_idx].progress;
                     let boost = remaining * PATRON_BONUS_RESEARCH_FRACTION;
                     state.active_research[proj_idx].progress += boost;
-                    let kind_label = state.active_research[proj_idx].kind.label(state);
-                    format!("Research assist: {} advanced {:.0}%", kind_label, PATRON_BONUS_RESEARCH_FRACTION * 100.0)
                 } else {
-                    // Fallback to funding if no active research.
                     let bonus = state.board_budget_per_tick * TICKS_PER_DAY * PATRON_BONUS_FUNDING_DAYS;
                     state.resources.funding += bonus;
-                    format!("Emergency funds: +¥{:.0}", bonus)
                 }
             }
             Some(BoardPersonality::Humanitarian) => {
-                // Emergency relief funding.
                 let bonus = state.board_budget_per_tick * TICKS_PER_DAY * PATRON_BONUS_FUNDING_DAYS;
                 state.resources.funding += bonus;
-                format!("Relief funds: +¥{:.0}", bonus)
             }
             Some(BoardPersonality::Dealmaker) => {
-                // Supply priority: dose boost on a random medicine with doses.
                 if let Some(med_idx) = pick_random_medicine(state, rng) {
                     let max_doses = state.medicines[med_idx].max_doses;
                     let boost = max_doses * PATRON_BONUS_DOSE_FRACTION;
                     let med = &mut state.medicines[med_idx];
                     med.doses = (med.doses + boost).min(med.max_doses);
-                    let name = med.name.clone();
-                    format!("Supply priority: +{:.0} doses of {}", boost, name)
                 } else {
-                    // Fallback to funding if no medicines.
                     let bonus = state.board_budget_per_tick * TICKS_PER_DAY * PATRON_BONUS_FUNDING_DAYS;
                     state.resources.funding += bonus;
-                    format!("Emergency funds: +¥{:.0}", bonus)
                 }
             }
-        };
+        }
 
         state.contracts[contract_idx].last_bonus_tick = state.tick;
     }

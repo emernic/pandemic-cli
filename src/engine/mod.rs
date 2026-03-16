@@ -350,7 +350,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
                 if new.active_crisis.is_none() {
                     let alert = crisis::build_crisis_event(&new, kind);
                     let post = crisis::activate_crisis(&mut new, alert, &mut events);
-                    dispatch_crisis_post_action(&mut new, post, &mut events);
+                    dispatch_crisis_post_action(&mut new, post);
                 } else {
                     new.pending_crises.push(kind);
                 }
@@ -425,7 +425,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
             if !new.regions[*to_region].collapsed {
                 let crisis = crisis::build_crisis_event(&new, kind);
                 let post = crisis::activate_crisis(&mut new, crisis, &mut events);
-                dispatch_crisis_post_action(&mut new, post, &mut events);
+                dispatch_crisis_post_action(&mut new, post);
             }
         } else if let CrisisKind::ArkProtocol { ref mut region_idx } = kind {
             // Validate Ark target: if region collapsed since queuing, re-pick
@@ -446,7 +446,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
             if !new.regions[*region_idx].collapsed {
                 let crisis = crisis::build_crisis_event(&new, kind);
                 let post = crisis::activate_crisis(&mut new, crisis, &mut events);
-                dispatch_crisis_post_action(&mut new, post, &mut events);
+                dispatch_crisis_post_action(&mut new, post);
             }
         } else if matches!(kind,
             CrisisKind::LoyaltyRaise { template_id } | CrisisKind::ContractDemand { template_id }
@@ -456,7 +456,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
         } else {
             let crisis = crisis::build_crisis_event(&new, kind);
             let post = crisis::activate_crisis(&mut new, crisis, &mut events);
-            dispatch_crisis_post_action(&mut new, post, &mut events);
+            dispatch_crisis_post_action(&mut new, post);
         }
     }
 
@@ -468,7 +468,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     {
         let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardMeeting);
         let post = crisis::activate_crisis(&mut new, crisis, &mut events);
-        dispatch_crisis_post_action(&mut new, post, &mut events);
+        dispatch_crisis_post_action(&mut new, post);
         // Schedule next meeting 7-10 days from now.
         let base = (7.0 * TICKS_PER_DAY) as u64;
         let range = (3.0 * TICKS_PER_DAY) as u64;
@@ -484,7 +484,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     {
         let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardEmbezzlementWarning);
         let post = crisis::activate_crisis(&mut new, crisis, &mut events);
-        dispatch_crisis_post_action(&mut new, post, &mut events);
+        dispatch_crisis_post_action(&mut new, post);
     }
 
     // Board Research Inquiry: fires once around day 5 if no identification research has been
@@ -505,7 +505,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
                 new.crisis_cooldowns.insert("board_research_inquiry".to_string(), new.tick);
                 let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardResearchInquiry);
                 let post = crisis::activate_crisis(&mut new, crisis, &mut events);
-                dispatch_crisis_post_action(&mut new, post, &mut events);
+                dispatch_crisis_post_action(&mut new, post);
             }
         }
     }
@@ -526,7 +526,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
         {
             let crisis = crisis::build_crisis_event(&new, CrisisKind::VoteOfNoConfidence);
             let post = crisis::activate_crisis(&mut new, crisis, &mut events);
-            dispatch_crisis_post_action(&mut new, post, &mut events);
+            dispatch_crisis_post_action(&mut new, post);
         }
     }
 
@@ -544,7 +544,7 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     {
         if let Some(crisis) = crisis::generate_crisis(&new, &mut rng_crisis) {
             let post = crisis::activate_crisis(&mut new, crisis, &mut events);
-            dispatch_crisis_post_action(&mut new, post, &mut events);
+            dispatch_crisis_post_action(&mut new, post);
         }
     }
 
@@ -779,7 +779,7 @@ pub struct CommandResult {
 
 /// Dispatch cross-subsystem effects from crisis resolution.
 /// Called from both `execute_command` (manual) and `tick` (auto-resolve).
-fn dispatch_crisis_post_action(state: &mut WorldState, post_action: crisis::CrisisPostAction, _events: &mut Vec<GameEvent>) -> Option<String> {
+fn dispatch_crisis_post_action(state: &mut WorldState, post_action: crisis::CrisisPostAction) -> Option<String> {
     match post_action {
         crisis::CrisisPostAction::None => None,
         crisis::CrisisPostAction::AcceptContract => {
@@ -842,7 +842,7 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
         }
         GameCommand::ResolveCrisis { choice } => {
             let (mut msg, post_action) = crisis::resolve_crisis(state, *choice, &mut events);
-            if let Some(m) = dispatch_crisis_post_action(state, post_action, &mut events) {
+            if let Some(m) = dispatch_crisis_post_action(state, post_action) {
                 msg = m;
             }
             CommandResult { message: Some(msg), success: true, events: Vec::new() }
