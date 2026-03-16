@@ -552,11 +552,15 @@ fn render_active_screening(lines: &mut Vec<Line<'static>>, run: &crate::state::S
             let well_start = plate_start + sym_idx * 8;
             let well_end = (well_start + 8).min(plate_end);
             if well_end <= wells_tested {
-                // Check if any hit falls in this range
-                let has_hit = run.hits.iter().any(|_| {
-                    // Approximate: distribute hits evenly across tested wells
-                    false // We'll use a simpler visual
-                });
+                // Show ◉ for symbols that "contain" a hit, distributed evenly
+                let hit_count = run.hits.len() as u32;
+                let has_hit = if hit_count > 0 && wells_tested > 0 {
+                    // Space hits evenly across tested wells
+                    let spacing = wells_tested / hit_count;
+                    (well_start..well_end).any(|w| w < wells_tested && spacing > 0 && w % spacing == 0)
+                } else {
+                    false
+                };
                 if has_hit {
                     plate_str.push('◉');
                 } else {
