@@ -24,4 +24,13 @@ else
 fi
 
 cd "$INSTALL_DIR"
-exec cargo run --release
+
+# Build first (so build output stays on the piped stdout when run via curl|bash),
+# then exec the binary with stdin reattached to the controlling TTY — needed for
+# the TUI's keyboard input when this script is invoked through `curl … | bash`.
+cargo build --release
+if [ -e /dev/tty ]; then
+  exec cargo run --release --quiet < /dev/tty
+else
+  exec cargo run --release --quiet
+fi
