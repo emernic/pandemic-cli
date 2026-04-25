@@ -15,17 +15,18 @@ You run the N.W.H.O. (New World Health Organization), managing six global region
  ╚════════════════════════╝   └────────────────────────┘   └────────────────────────┘
 ```
 
-## Quick start
+## Quick Play
 
-One-liner — installs Rust if needed, clones the repo, and launches the game:
-
-```bash
+Running this one line in your terminal will download, install, and run the game in one shot:
+```
 curl -fsSL https://raw.githubusercontent.com/emernic/pandemic-cli/master/install_and_play.sh | bash
 ```
 
-Re-run it any time to pull the latest version and play again.
+Note:
+- Only works on Mac or Linux
+- Only run if you trust me ;)
 
-## Build manually
+## Build
 
 ```bash
 cargo build && cargo run
