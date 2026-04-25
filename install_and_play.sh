@@ -25,12 +25,15 @@ fi
 
 cd "$INSTALL_DIR"
 
-# Build first (so build output stays on the piped stdout when run via curl|bash),
-# then exec the binary with stdin reattached to the controlling TTY — needed for
-# the TUI's keyboard input when this script is invoked through `curl … | bash`.
+# Build, then exec the compiled binary directly. We deliberately skip
+# `cargo run` here: when this script is invoked via `curl … | bash`, cargo's
+# stdio handling masks the controlling terminal from the child process and
+# crossterm fails with "Failed to initialize input reader". Running the binary
+# directly with stdin/stdout reattached to /dev/tty lets the TUI come up.
 cargo build --release
+BIN="$INSTALL_DIR/target/release/pandemic-cli"
 if [ -e /dev/tty ]; then
-  exec cargo run --release --quiet < /dev/tty
+  exec "$BIN" < /dev/tty > /dev/tty
 else
-  exec cargo run --release --quiet
+  exec "$BIN"
 fi
