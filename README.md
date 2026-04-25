@@ -17,12 +17,10 @@ You run the N.W.H.O. (New World Health Organization), managing six global region
 
 ## Quick Play
 
-Paste this into your terminal — it installs Rust if you don't have it, builds the game, and launches it:
+Running this one line in your terminal will download, install, and run the game in one shot:
 ```
 command -v cargo >/dev/null || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; . "$HOME/.cargo/env" 2>/dev/null; cargo install --locked --git https://github.com/emernic/pandemic-cli && pandemic-cli
 ```
-
-Re-run it any time to update to the latest version. The binary lives at `~/.cargo/bin/pandemic-cli`.
 
 Note:
 - Only works on Mac or Linux
