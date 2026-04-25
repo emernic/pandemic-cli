@@ -15,6 +15,17 @@ You run the N.W.H.O. (New World Health Organization), managing six global region
  ╚════════════════════════╝   └────────────────────────┘   └────────────────────────┘
 ```
 
+## Quick Play
+
+Running this one line in your terminal will download, install, and run the game in one shot:
+```
+curl -fsSL https://raw.githubusercontent.com/emernic/pandemic-cli/master/install_and_play.sh | bash
+```
+
+Note:
+- Only works on Mac or Linux
+- Only run if you trust me ;)
+
 ## Build
 
 ```bash
